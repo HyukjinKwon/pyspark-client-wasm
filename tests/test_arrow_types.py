@@ -36,6 +36,16 @@ from test_arrow_results import FakeArrowBatch, FakeResponse, _ipc_stream_bytes
 SESSION_TZ = "America/Los_Angeles"  # UTC-8 in winter, a fixed non-UTC zone
 
 
+def _is_null(v) -> bool:
+    """Version-robust null check: pandas renders an object-column null as None
+    or NaN (or NaT) depending on the pandas/pyarrow version, so do not assert
+    one specific sentinel."""
+    try:
+        return bool(pd.isna(v))
+    except (TypeError, ValueError):  # array-like (a non-null list/struct value)
+        return False
+
+
 def _decode(table: pa.Table, *, session_timezone: "str | None" = None) -> pd.DataFrame:
     """Encode a one-batch table to IPC bytes and decode it back to pandas."""
     batch = table.combine_chunks().to_batches()[0]
@@ -90,19 +100,23 @@ def test_boolean_with_nulls():
     table = pa.table({"b": pa.array([True, None, False], pa.bool_())})
     got = _assert_native_roundtrip(table)
     assert got["b"].iloc[0] is True or got["b"].iloc[0] == True  # noqa: E712
-    assert got["b"].iloc[1] is None
+    assert _is_null(got["b"].iloc[1])
 
 
 def test_string_with_nulls():
     table = pa.table({"s": pa.array(["alpha", None, "gamma"], pa.string())})
     got = _assert_native_roundtrip(table)
-    assert got["s"].tolist() == ["alpha", None, "gamma"]
+    assert got["s"].iloc[0] == "alpha"
+    assert got["s"].iloc[2] == "gamma"
+    assert _is_null(got["s"].iloc[1])
 
 
 def test_binary_with_nulls():
     table = pa.table({"bin": pa.array([b"\x00\x01\x02", None, b""], pa.binary())})
     got = _assert_native_roundtrip(table)
-    assert got["bin"].tolist() == [b"\x00\x01\x02", None, b""]
+    assert got["bin"].iloc[0] == b"\x00\x01\x02"
+    assert got["bin"].iloc[2] == b""
+    assert _is_null(got["bin"].iloc[1])
 
 
 # --------------------------------------------------------------------------- #
@@ -119,7 +133,7 @@ def test_decimal128_with_nulls():
     )
     got = _assert_native_roundtrip(table)
     assert isinstance(got["d"].iloc[0], decimal.Decimal)
-    assert got["d"].iloc[1] is None
+    assert _is_null(got["d"].iloc[1])
 
 
 def test_decimal256_with_nulls():
@@ -133,7 +147,7 @@ def test_decimal256_with_nulls():
     )
     got = _assert_native_roundtrip(table)
     assert isinstance(got["d"].iloc[0], decimal.Decimal)
-    assert got["d"].iloc[1] is None
+    assert _is_null(got["d"].iloc[1])
 
 
 # --------------------------------------------------------------------------- #
@@ -145,7 +159,7 @@ def test_date32_with_nulls():
     )
     got = _assert_native_roundtrip(table)
     assert got["d"].iloc[0] == datetime.date(2021, 1, 1)
-    assert got["d"].iloc[1] is None
+    assert _is_null(got["d"].iloc[1])
 
 
 # --------------------------------------------------------------------------- #
@@ -226,8 +240,8 @@ def test_struct_with_nulls():
     expected = table.to_pandas(coerce_temporal_nanoseconds=True)
     pd.testing.assert_frame_equal(got.reset_index(drop=True), expected)
     assert got["strct"].iloc[0]["x"] == 1
-    assert got["strct"].iloc[1]["y"] is None
-    assert got["strct"].iloc[2] is None
+    assert _is_null(got["strct"].iloc[1]["y"])
+    assert _is_null(got["strct"].iloc[2])
 
 
 # --------------------------------------------------------------------------- #
@@ -241,7 +255,7 @@ def test_list_with_nulls():
     expected = table.to_pandas(coerce_temporal_nanoseconds=True)
     pd.testing.assert_frame_equal(got.reset_index(drop=True), expected)
     assert list(got["lst"].iloc[0]) == [1, 2]
-    assert got["lst"].iloc[2] is None
+    assert _is_null(got["lst"].iloc[2])
 
 
 # --------------------------------------------------------------------------- #
@@ -261,7 +275,7 @@ def test_map_with_nulls():
     pd.testing.assert_frame_equal(got.reset_index(drop=True), expected)
     # pyarrow renders a map as a list of (key, value) tuples.
     assert dict(got["mp"].iloc[0])["k1"] == 1
-    assert got["mp"].iloc[2] is None
+    assert _is_null(got["mp"].iloc[2])
 
 
 # --------------------------------------------------------------------------- #

@@ -506,6 +506,7 @@ class _AtomicsBackend:
     # -- SyncBackend --------------------------------------------------------- #
     def unary(self, request: dict) -> HttpResponse:
         self._gen += 1
+        my_gen = self._gen
         self._write_request(request)
         state = self._wait(_S_REQ_READY, request.get("timeout"))
         try:
@@ -525,11 +526,11 @@ class _AtomicsBackend:
             # it raises the right SparkConnectGrpcException (the transport contract section 1).
             return HttpResponse(status=status, headers=headers, body=body)
         finally:
-            self._js.Atomics.store(self._ctrl, _C_STATE, _S_IDLE)
-            self._js.Atomics.notify(self._ctrl, _C_STATE)
+            self._reset_idle_if_current(my_gen)
 
     def server_stream(self, request: dict) -> Iterator[bytes]:
         self._gen += 1
+        my_gen = self._gen
         timeout = request.get("timeout")
         self._write_request(request)
         Atomics = self._js.Atomics
@@ -551,14 +552,32 @@ class _AtomicsBackend:
                 # off-the-wire chunks (it re-frames them downstream).
                 _meta, chunk = self._reassemble_windows(timeout)
                 yield chunk
+                # The consumer (e.g. PySpark's reattachable iterator on an eager
+                # command) may abandon this stream here and start another RPC,
+                # which bumps _C_GEN. If so we are stale: do NOT touch shared
+                # STATE (an ack/IDLE would stomp the newer RPC mid-flight).
+                if Atomics.load(self._ctrl, _C_GEN) != my_gen:
+                    return
                 # Ack: request the next chunk, then park on CHUNK_ACK.
                 Atomics.store(self._ctrl, _C_STATE, _S_CHUNK_ACK)
                 Atomics.notify(self._ctrl, _C_STATE)
                 wait_on = _S_CHUNK_ACK
                 timeout = request.get("timeout")
         finally:
-            Atomics.store(self._ctrl, _C_STATE, _S_IDLE)
-            Atomics.notify(self._ctrl, _C_STATE)
+            self._reset_idle_if_current(my_gen)
+
+    def _reset_idle_if_current(self, my_gen: int) -> None:
+        """Flip STATE back to IDLE on exit, but ONLY if this RPC is still the
+        current one. A stream abandoned by the consumer is finalized (its
+        ``finally`` runs) possibly long after a newer RPC has started; writing
+        IDLE then would stomp that newer RPC. ``_C_GEN`` (bumped by every
+        ``_write_request``) is the guard: skip if a newer generation owns the
+        channel."""
+        Atomics = self._js.Atomics
+        if Atomics.load(self._ctrl, _C_GEN) != my_gen:
+            return
+        Atomics.store(self._ctrl, _C_STATE, _S_IDLE)
+        Atomics.notify(self._ctrl, _C_STATE)
 
     # -- error mapping ------------------------------------------------------- #
     def _error_from_meta(self) -> TransportError:

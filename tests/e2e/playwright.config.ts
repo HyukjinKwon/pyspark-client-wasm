@@ -21,13 +21,12 @@ export default defineConfig({
   timeout: 150_000,
   expect: { timeout: 30_000 },
   fullyParallel: false,
-  // Browser e2e against a freshly-booted full stack (Pyodide cold start + Spark
-  // Connect/Envoy warmup) is occasionally flaky on the first commands; a
-  // transient stall once wedged spark.sql for the whole timeout. Retry in CI so
-  // an intermittent stall re-runs (in serial mode Playwright re-runs the whole
-  // booted describe block) instead of failing the gate; a real break still fails
-  // all attempts. Local runs do not retry (fail fast while iterating).
-  retries: process.env.CI ? 2 : 0,
+  // No retries: the gate must be honest. The intermittent spark.sql hang was a
+  // real SAB-bridge deadlock (a back-to-back RPC whose S_REQ_READY raced the
+  // abandoned stream's S_IDLE), now fixed at the source in bridge.js /
+  // sab_channel.py and regression-covered in tests/js/bridge.test.mjs. We do not
+  // paper over it with retries.
+  retries: 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL: BASE_URL,

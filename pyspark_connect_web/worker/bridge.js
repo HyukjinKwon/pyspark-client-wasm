@@ -145,7 +145,7 @@ class Bridge {
       if (more) {
         // Worker must ack this window before we write the next one.
         const ack = await this._awaitWorker(S_CHUNK_ACK);
-        if (ack === S_IDLE) return false;
+        if (ack === S_IDLE || ack === S_REQ_READY) return false;
       }
     } while (sent < total);
     return true;
@@ -166,7 +166,13 @@ class Bridge {
   async _awaitWorker(expect) {
     while (true) {
       const cur = Atomics.load(this.ctrl, C_STATE);
-      if (cur === expect || cur === S_IDLE) return cur;
+      // S_IDLE     -> the worker abandoned this exchange (closed the stream).
+      // S_REQ_READY -> the worker abandoned it AND already wrote the next
+      //   request (it can win the race between flipping S_IDLE and S_REQ_READY,
+      //   especially after a fast/small response). Either way, stop waiting for
+      //   our ack: handleRpc's finally re-dispatches the pending request. Not
+      //   returning on S_REQ_READY here is the deadlock that wedged spark.sql.
+      if (cur === expect || cur === S_IDLE || cur === S_REQ_READY) return cur;
       if (typeof Atomics.waitAsync === "function") {
         const r = Atomics.waitAsync(this.ctrl, C_STATE, cur);
         if (r.async) await r.value;
@@ -272,7 +278,7 @@ class Bridge {
         if (!cont) return; // worker abandoned the stream (closed / errored)
         // Wait for the worker to consume this message and request the next.
         const ack = await this._awaitWorker(S_CHUNK_ACK);
-        if (ack === S_IDLE) return;
+        if (ack === S_IDLE || ack === S_REQ_READY) return;
       }
       // End of stream.
       Atomics.store(this.ctrl, C_LENGTH, 0);
@@ -287,6 +293,13 @@ class Bridge {
     } finally {
       if (timer) clearTimeout(timer);
       this._busy = false;
+      // If the worker has already posted the next request, process it now. Its
+      // `pcw_rpc` nudge may have arrived while we were busy (and been dropped by
+      // the busy-guard), or it superseded an abandoned stream. Without this the
+      // request would sit in S_REQ_READY with nobody servicing it -> deadlock.
+      if (this.ctrl && Atomics.load(this.ctrl, C_STATE) === S_REQ_READY) {
+        this.handleRpc();
+      }
     }
   }
 }

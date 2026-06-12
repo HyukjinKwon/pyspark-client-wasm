@@ -529,6 +529,63 @@ describe("handleRpc: server-streaming reader loop", () => {
   });
 });
 
+describe("handleRpc: abandoned stream + back-to-back RPC (spark.sql deadlock regression)", () => {
+  let origFetch;
+  beforeEach(() => {
+    origFetch = globalThis.fetch;
+  });
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+  });
+
+  // Regression for the intermittent spark.sql hang. spark.sql().collect() runs
+  // two server-streaming RPCs back-to-back; PySpark's eager command consumes the
+  // first stream, abandons it mid-flight (stops acking), and starts the second.
+  // The worker can flip S_IDLE->S_REQ_READY faster than the parked main thread
+  // observes S_IDLE, so the main thread sees the *next* request's S_REQ_READY
+  // while waiting for this stream's CHUNK_ACK. The bridge must treat that as
+  // "exchange abandoned" and re-dispatch the pending request rather than parking
+  // forever (the deadlock).
+  it("re-dispatches the next request when a stream is abandoned and S_REQ_READY races in", async () => {
+    const fw = new FakeWorker(64 * 1024);
+    const b = attached(fw);
+    const rpc2Body = new Uint8Array([0, 0, 0, 0, 2, 0xab, 0xcd]);
+    globalThis.fetch = vi.fn(async (url) => {
+      if (url.endsWith("/rpc1")) {
+        // two chunks so the stream is NOT done after the worker reads the first
+        return fakeStreamResponse({
+          chunks: [new Uint8Array([1, 1, 1]), new Uint8Array([2, 2, 2])],
+        });
+      }
+      return fakeUnaryResponse({ body: rpc2Body });
+    });
+
+    // RPC1: server_stream. Worker reads the first chunk but does NOT ack it.
+    fw.writeRequest(
+      { kind: "server_stream", url: "https://h/rpc1", headers: {}, timeout: null, gen: 1 },
+      new Uint8Array([0])
+    );
+    b.handleRpc();
+    expect(await fw.waitState(S_REQ_READY)).toBe(S_RESP_CHUNK);
+    fw.readWindow(); // consume chunk1; deliberately skip the ack (abandon)
+
+    // The consumer abandons RPC1 and the worker writes RPC2, bumping gen. Its
+    // nudge arrives while the bridge is still "busy" on RPC1 and is dropped.
+    fw.writeRequest(
+      { kind: "unary", url: "https://h/rpc2", headers: {}, timeout: null, gen: 2 },
+      new Uint8Array([9])
+    );
+    b.handleRpc(); // dropped (busy) -> must be recovered by the finally re-dispatch
+
+    // Pre-fix this hangs forever (main parked on CHUNK_ACK). Post-fix the bridge
+    // bails on S_REQ_READY and re-dispatches RPC2.
+    expect(await fw.waitState(S_REQ_READY)).toBe(S_RESP_CHUNK);
+    const { payload } = await fw.reassemble();
+    expect(Array.from(payload)).toEqual(Array.from(rpc2Body));
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("error paths: _writeError", () => {
   let origFetch;
   beforeEach(() => {

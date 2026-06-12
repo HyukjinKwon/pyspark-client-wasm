@@ -20,11 +20,11 @@ so `.collect()` returns data synchronously. See `API_CONTRACT.md` for the seam.
 ## Module ownership (claim/adjust your row; use your lane tag)
 | Lane | Area | File(s) | Owner | Status |
 |------|------|---------|-------|--------|
-| 1 | grpc-web stub + framing | `pyspark_connect_web/transport/*` | (open) | |
-| 2 | monkey-patch + integration | `pyspark_connect_web/__init__.py`, `patch.py`, `_contract.py` | (open) | |
-| 3 | Pyodide sync bridge + JupyterLite | `pyspark_connect_web/worker/*`, `jupyterlite/*` | (open) | |
-| 4 | Arrow result decoding | `pyspark_connect_web/arrow/*` | (open) | |
-| 5 | Envoy proxy + e2e tests + docs | `deploy/*`, `tests/*`, `README.md`, `docs/*` | (open) | |
+| 1 | grpc-web stub + framing | `pyspark_connect_web/transport/*` | lane1 | v0 done (framing+stub+40 tests) |
+| 2 | monkey-patch + integration | `pyspark_connect_web/__init__.py`, `patch.py`, `_contract.py` | lane2 | v0 done (patch+tests; pending lanes 1/3 factories) |
+| 3 | Pyodide sync bridge + JupyterLite | `pyspark_connect_web/worker/*`, `jupyterlite/*` | lane3 | v0: SabSyncChannel + JS bridge + lite config + 13 tests |
+| 4 | Arrow result decoding | `pyspark_connect_web/arrow/*` | lane4 | v0 done (decode+encode+SPARK-53525 reassembly+17 tests) |
+| 5 | Envoy proxy + e2e tests + docs | `deploy/*`, `tests/e2e/*`, `docs/*`, `README.md`, `.github/workflows/ci.yml` | lane5 | v0 scaffold (proxy+e2e+docs+CI) |
 | — | contract / scaffold / integration | `API_CONTRACT.md`, `DECISIONS.md`, `_contract_seam.py`, `pyproject.toml` | INTEGRATOR | done (v0 scaffold) |
 
 ## Conventions
@@ -43,3 +43,79 @@ so `.collect()` returns data synchronously. See `API_CONTRACT.md` for the seam.
   (so COOP/COEP is mandatory — see DECISIONS.md). Lanes: claim your row above and
   start. The hardest seam is lane1⟷lane3 (the `SyncChannel` byte boundary) — agree
   on it here before diverging.
+- LANE 2 2026-06-12: `install()` implemented in `patch.py` (idempotent, version-guarded
+  to `>=4.0,<4.2`). Patches 3 private symbols (VERIFIED on pyspark 4.0.0): replaces
+  `proto.base_pb2_grpc.SparkConnectServiceStub` (one attribute covers both the core
+  + ArtifactManager stub sites), wraps `DefaultChannelBuilder.__init__` (web-scheme
+  parsing) and `.toChannel()` (returns a `WebChannel` marker, never calls `grpc.*`).
+  Web scheme `sc://host:port/;transport=grpcweb` + `https://`/`http://` shorthand.
+  Lanes 1/3 wiring is via pluggable hooks `set_stub_factory`/`set_channel_factory`
+  (lazy defaults, no import cycle). **ACTION lane 1:** default factory calls
+  `GrpcWebStub(sync_channel, metadata=[(k,v),...])`. **ACTION lane 3:** default calls
+  `SabSyncChannel(base_url="http(s)://host:port")`. Conform or ping me. Full details
+  + exact symbols in `team/findings-lane2-patch.md`. 17 guard tests green; no grpcio.
+- LANE 1 2026-06-12: `transport/framing.py` + `transport/grpcweb.py` landed. 40 tests
+  green, all 56 repo tests green; no grpcio anywhere. **CONFORMED to lane 2's seam:**
+  `GrpcWebStub(sync_channel, metadata=[(k,v),...])` works (made `metadata=` the
+  canonical channel-default kwarg; `default_metadata=` kept as alias). Guard test
+  `test_lane2_default_stub_factory_builds_real_stub` drives lane 2's real
+  `_default_stub_factory` with a fake channel end-to-end — fails loudly if either
+  side drifts. **Seam notes for integrator/lane 3:** (1) `AddArtifacts` is
+  client-streaming but `SyncChannel` has no client-stream method — I lower it to
+  frame-concatenate + single `unary()` POST (grpc-web has no true client streaming).
+  No SyncChannel change needed; flag me if you disagree. (2) `SparkConnectGrpcException`
+  is at `pyspark.errors.exceptions.connect` in 4.0.0, NOT re-exported from
+  `pyspark.errors` as API_CONTRACT §1 implies — I import resiliently. (3) Dropped
+  stream (no trailer frame) raises so PySpark's reattachable iterator recovers
+  (DECISIONS.md #6). Details in `team/findings-lane1-transport.md`.
+- LANE 5 2026-06-12: Landed `deploy/` (envoy.yaml grpc_web+CORS on :8081, static
+  host with COOP/COEP on :8000, compose.yaml = apache/spark:4.0.0 Connect server
+  on :15002 + Envoy + static; README), `tests/e2e/` (Playwright harness scaffold:
+  one test per DECISIONS.md "v0 done =" item with TODO hooks + graceful skip when
+  stack down; `reference.py` native-client ground-truth generator), `docs/`
+  (architecture + running-locally), expanded `README.md` quickstart, and
+  `.github/workflows/ci.yml` (pytest + grpcio-guard scoped to `pyspark_connect_web/`
+  + COOP/COEP-present guard on deploy config). **Ports decided:** client uses
+  `sc://localhost:8081/;transport=grpcweb` (per API_CONTRACT §2); upstream gRPC on
+  :15002 (Spark default, also host-exposed for `reference.py`). **ACTION lane 3:**
+  e2e needs (a) `jupyterlite build` output into `./_output` (served by the `static`
+  container) and (b) a `window.__pcwRunPython(src)` JS bridge that runs Python in
+  the kernel and returns JSON — see TODO hooks in `tests/e2e/helpers.ts`. Only the
+  `crossOriginIsolated` check + CI guards are live today; the rest are `test.fixme`
+  pending lanes 1-4. No grpcio in the package. Versions/gotchas in
+  `team/findings-lane5-deploy.md`.
+- LANE 3 2026-06-12: Bridge landed. `worker/sab_channel.py` = `SabSyncChannel`
+  (the `SyncChannel`) over a pluggable `SyncBackend`: `_AtomicsBackend`
+  (SAB+Atomics.wait) under Pyodide, injected fake in tests. **CONFORMS to lane 2's
+  seam:** `SabSyncChannel(base_url="http(s)://host:port")` positional, matches your
+  default channel factory. **To lane 1:** `unary`/`server_stream` block and match
+  your usage — your AddArtifacts->single `unary()` lowering and dropped-stream->raise
+  (reattach) both work as-is; `server_stream` is a lazy generator so a broken stream
+  surfaces promptly (DECISIONS.md #6). One open ask: `HttpResponse.headers` is `{}`
+  today (status only) — confirm grpc-web trailers ride in the body frame, not HTTP
+  headers (I believe yes per API_CONTRACT §1). JS glue: `worker/bridge.js` (main
+  thread fetch+SAB writeback) + `worker/worker_bootstrap.js` (Pyodide load, micropip,
+  SAB alloc). **To lane 5:** (a) build into `_output` per `jupyterlite/README.md`;
+  (b) `window.__pcwRunPython(src)` provided by `jupyterlite/run_python_bridge.js`
+  (standalone harness shape works; JupyterLite-kernel shape is the flagged open
+  item — kernel runs its own worker). COOP/COEP in `jupyterlite/_headers`; demo
+  asserts `crossOriginIsolated`. 13 lane-3 tests green (no browser/grpcio/net). Full
+  SAB layout + Atomics state machine + open questions in `team/findings-lane3-bridge.md`.
+- LANE 4 2026-06-12: `arrow/results.py` landed. `decode_arrow_batches(responses)`
+  + `encode_local_relation(pdf)` per API_CONTRACT §3, plus additive helper
+  `reassemble_record_batches` (purely the bytes->RecordBatch step, exported for
+  reuse/testing; no seam change). **Decision: REIMPLEMENT** the reassembly+IPC
+  decode, **REUSE** pyarrow `Table.to_pandas` — measured pyspark 4.0.0's
+  `to_pandas`/`_execute_and_fetch` and it needs a live client+plan+config RPCs,
+  not callable on a bare response iterable; and its loop predates SPARK-53525.
+  `encode_local_relation` is byte-identical to `plan.LocalRelation.plan` framing
+  (guard test). **SPARK-53525 handled:** reassemble chunks by
+  `chunk_index`/`num_chunks_in_batch` (proto3 optional, Spark 4.1+); on pyspark
+  4.0.0 those fields don't exist, so `HasField` raises ValueError — we catch it
+  and treat every batch as whole (correct; 4.0 never chunks). 17 tests green incl.
+  multi-chunk split-batch + integrity guards; no grpcio. **Heads-up lane 2
+  (parity/DECISIONS.md #7):** lane 4 does NOT apply session-timezone localization
+  or struct-handling-mode (no client config available from a response iterable) —
+  if the parity test diverges on a timestamp/struct column, wrap our DataFrame
+  with `_create_converter_to_pandas` using live session config, or pass us the tz.
+  Only known gap to byte-exact parity; details in `team/findings-lane4-arrow.md`.

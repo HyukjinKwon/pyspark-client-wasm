@@ -1,0 +1,16 @@
+{
+  "jupyter-lite-schema-version": 0,
+  "jupyter-config-data": {
+    "appName": "PySpark in JupyterLite",
+    "appVersion": "0.0.1.dev0",
+    "litePluginSettings": {
+      "@jupyterlite/pyodide-kernel-extension:kernel": {
+        "pyodideUrl": "https://cdn.jsdelivr.net/pyodide/v0.28.0/full/pyodide.js",
+        "loadPyodideOptions": {
+          "packages": ["micropip", "pyarrow", "pandas", "numpy"]
+        }
+      }
+    },
+    "settingsOverrides": {}
+  }
+}

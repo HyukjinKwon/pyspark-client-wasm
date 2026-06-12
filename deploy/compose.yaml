@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# docker compose for pyspark-connect-web (lane 5).
+#
+#   docker compose -f deploy/compose.yaml up
+#
+# Brings up three services:
+#   * spark-connect : a Spark 4.x Connect server (gRPC on :15002, internal only)
+#   * static        : serves the built JupyterLite site (lane 3 output) on :80,
+#                     fronted by Envoy with COOP/COEP
+#   * envoy         : grpc-web proxy on :8081 + static host on :8000
+#
+# Endpoint the browser client uses:
+#   sc://localhost:8081/;transport=grpcweb
+# JupyterLite page (cross-origin isolated):
+#   http://localhost:8000/
+#
+# Version pins (see team/findings-lane5-deploy.md for the why + gotchas):
+#   * apache/spark:4.0.0          -> Spark 4.0.0, bundles Spark Connect server
+#   * envoyproxy/envoy:v1.31-latest
+#   * Pyodide >= 0.28 / Python 3.13 in the browser (provided by lane 3)
+#
+# NOTE: the Spark Connect *package* coordinate must match the Spark version.
+# For Spark 4.0.0 + Scala 2.13 that is:
+#   org.apache.spark:spark-connect_2.13:4.0.0
+
+services:
+  spark-connect:
+    image: apache/spark:4.0.0
+    container_name: pcw-spark-connect
+    # start-connect-server.sh ships in the apache/spark image under
+    # $SPARK_HOME/sbin. It launches the Connect server in the foreground when
+    # we exec it directly (vs. the `start-` daemon wrapper that backgrounds).
+    # We bind to 0.0.0.0:15002 so Envoy (another container) can reach it.
+    command:
+      - /bin/bash
+      - -c
+      - >-
+        /opt/spark/sbin/start-connect-server.sh
+        --packages org.apache.spark:spark-connect_2.13:4.0.0
+        --conf spark.connect.grpc.binding.address=0.0.0.0
+        --conf spark.connect.grpc.binding.port=15002
+        && tail -f /opt/spark/logs/*.out
+    environment:
+      # Pin the JVM/driver memory small enough for a laptop.
+      SPARK_NO_DAEMONIZE: "false"
+    expose:
+      - "15002"
+    # Exposed on the host too, so the reference-result generator
+    # (tests/e2e/reference.py) can connect with a *native* Spark Connect client
+    # over plain gRPC (NOT grpc-web) at sc://localhost:15002 .
+    ports:
+      - "15002:15002"
+    healthcheck:
+      # Connect server is up once the gRPC port accepts TCP. (bash /dev/tcp
+      # avoids needing nc/curl in the image.)
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/15002' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  static:
+    # Tiny static file server for the built JupyterLite site. The site is
+    # produced by lane 3 (`jupyterlite build`) into ./_output; mount it here.
+    # halverneus/static-file-server serves the dir on :8080 by default; we pin
+    # the listen port to 80 to match envoy.yaml's static-site cluster.
+    image: halverneus/static-file-server:v1.8.10
+    container_name: pcw-static
+    environment:
+      FOLDER: /web
+      PORT: "80"
+    expose:
+      - "80"
+    volumes:
+      # Lane 3 builds the JupyterLite site here. Until it exists, an empty dir
+      # still lets the stack come up (the page just 404s).
+      - ../_output:/web:ro
+
+  envoy:
+    image: envoyproxy/envoy:v1.31-latest
+    container_name: pcw-envoy
+    command: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "pcw-envoy"]
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+    ports:
+      - "8081:8081"   # grpc-web endpoint  (client: sc://localhost:8081/;transport=grpcweb)
+      - "8000:8000"   # JupyterLite static site (COOP/COEP)
+      - "9901:9901"   # Envoy admin
+    depends_on:
+      spark-connect:
+        condition: service_healthy
+      static:
+        condition: service_started

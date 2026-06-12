@@ -1,0 +1,15 @@
+{
+  "name": "pyspark-connect-web-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Headless-browser e2e harness for pyspark-connect-web (lane 5). SPDX-License-Identifier: Apache-2.0",
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "install:browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

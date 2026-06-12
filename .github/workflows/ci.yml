@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# CI for pyspark-connect-web (lane 5 owns this sketch).
+#
+# Jobs:
+#   * unit            — pytest (transport stubbed; no browser, no grpcio)
+#   * grpcio-guard    — fails if grpcio is imported anywhere under
+#                       pyspark_connect_web/ (DECISIONS.md #1)
+#   * headers-guard   — fails if deploy config is missing the mandatory
+#                       cross-origin-isolation headers (DECISIONS.md #4)
+#
+# The e2e job is intentionally NOT a required gate yet: the browser stack
+# (lanes 1–4 + JupyterLite build) is not runnable, so e2e would skip. A
+# commented sketch is included at the bottom to flip on once the stack lands.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    name: unit tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: pytest
+        # Only collect unit tests; the e2e dir is Playwright/TS + a native-only
+        # reference generator that needs a live Spark Connect server.
+        run: pytest -q --ignore=tests/e2e
+
+  grpcio-guard:
+    name: no grpcio under pyspark_connect_web/ (DECISIONS.md #1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: grep for grpcio imports
+        run: |
+          set -euo pipefail
+          # Match `import grpc`, `import grpcio`, `from grpc import ...`,
+          # `from grpcio... import ...`. Scoped to the package only — tests/
+          # (e.g. the native reference generator) are allowed to use grpcio.
+          if grep -rnE '^[[:space:]]*(import[[:space:]]+grpc(io)?\b|from[[:space:]]+grpc(io)?[._[:space:]])' \
+               pyspark_connect_web/ ; then
+            echo "::error::grpcio/grpc imported inside pyspark_connect_web/ — forbidden (DECISIONS.md #1)."
+            exit 1
+          fi
+          echo "OK: no grpcio imports in pyspark_connect_web/"
+
+  headers-guard:
+    name: COOP/COEP present in deploy config (DECISIONS.md #4)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: assert cross-origin isolation headers
+        run: |
+          set -euo pipefail
+          cfg=deploy/envoy.yaml
+          test -f "$cfg" || { echo "::error::$cfg missing"; exit 1; }
+          grep -q 'Cross-Origin-Opener-Policy' "$cfg" \
+            || { echo "::error::missing Cross-Origin-Opener-Policy in $cfg"; exit 1; }
+          grep -q 'same-origin' "$cfg" \
+            || { echo "::error::COOP value should be same-origin in $cfg"; exit 1; }
+          grep -q 'Cross-Origin-Embedder-Policy' "$cfg" \
+            || { echo "::error::missing Cross-Origin-Embedder-Policy in $cfg"; exit 1; }
+          grep -q 'require-corp' "$cfg" \
+            || { echo "::error::COEP value should be require-corp in $cfg"; exit 1; }
+          echo "OK: COOP/COEP present in $cfg"
+
+  # ---------------------------------------------------------------------------
+  # e2e (DISABLED until the browser stack lands). Uncomment + set
+  # E2E_REQUIRE_STACK=1 once lanes 1–4 + the JupyterLite build are runnable.
+  # ---------------------------------------------------------------------------
+  # e2e:
+  #   name: headless-browser e2e (DECISIONS.md "v0 done =")
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: bring up stack
+  #       run: docker compose -f deploy/compose.yaml up -d
+  #     - uses: actions/setup-python@v5
+  #       with: { python-version: "3.11" }
+  #     - name: reference results
+  #       run: |
+  #         pip install -e ".[dev]"
+  #         python tests/e2e/reference.py --remote sc://localhost:15002 --out tests/e2e/reference.json
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: "20" }
+  #     - name: playwright
+  #       working-directory: tests/e2e
+  #       run: |
+  #         npm install
+  #         npx playwright install --with-deps chromium
+  #         E2E_REQUIRE_STACK=1 E2E_BASE_URL=http://localhost:8000 npx playwright test

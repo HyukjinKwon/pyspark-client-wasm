@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# Cross-origin isolation headers (DECISIONS.md #4). REQUIRED for SharedArrayBuffer.
+# Netlify/Cloudflare-Pages-style `_headers` file; copied into the build output so
+# the static host sets COOP/COEP. Without these, crossOriginIsolated === false and
+# the blocking bridge cannot work.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Resource-Policy: cross-origin

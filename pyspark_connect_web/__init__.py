@@ -8,22 +8,30 @@ Public API:
     from pyspark.sql import SparkSession
     spark = SparkSession.builder.remote("sc://host:8081/;transport=grpcweb").getOrCreate()
 
-Lane 2 owns this file and `patch.py`. The body below is a placeholder skeleton
-to be filled per API_CONTRACT.md §2 — kept importable so other lanes can wire up.
+Lane 2 owns this file and ``patch.py``. The heavy lifting lives in ``patch.py``;
+this module is the stable public surface (``install`` + ``__version__``).
 """
 from __future__ import annotations
 
+from .patch import (
+    SUPPORTED_PYSPARK_RANGE,
+    UnsupportedPySparkError,
+    install,
+    is_installed,
+    set_channel_factory,
+    set_stub_factory,
+    uninstall,
+)
+
 __version__ = "0.0.1.dev0"
 
-_INSTALLED = False
-
-
-def install() -> None:
-    """Monkey-patch pyspark.sql.connect to use the grpc-web transport. Idempotent."""
-    global _INSTALLED
-    if _INSTALLED:
-        return
-    raise NotImplementedError(
-        "lane 2: implement install() per API_CONTRACT.md §2 "
-        "(version-guard pyspark, swap the stub, teach the connection parser)."
-    )
+__all__ = [
+    "__version__",
+    "install",
+    "uninstall",
+    "is_installed",
+    "set_channel_factory",
+    "set_stub_factory",
+    "SUPPORTED_PYSPARK_RANGE",
+    "UnsupportedPySparkError",
+]

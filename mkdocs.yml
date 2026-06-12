@@ -12,34 +12,56 @@ copyright: "Licensed under Apache-2.0."
 
 theme:
   name: material
+  language: en
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/language-python
   features:
-    - navigation.instant
-    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.top
     - navigation.indexes
+    - navigation.footer
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - toc.follow
     - content.code.copy
     - content.code.annotate
-    - toc.follow
+    - content.tooltips
     - search.suggest
     - search.highlight
+    - search.share
   palette:
+    # Python brand: blue + yellow. Custom colors are defined in
+    # docs/stylesheets/extra.css ([data-md-color-primary="custom"], ...).
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: deep orange
-      accent: orange
+      primary: custom
+      accent: custom
       toggle:
-        icon: material/brightness-7
+        icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: deep orange
-      accent: orange
+      primary: custom
+      accent: custom
       toggle:
-        icon: material/brightness-4
+        icon: material/weather-sunny
         name: Switch to light mode
-  icon:
-    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/HyukjinKwon/pyspark-client-wasm
+      name: pyspark-connect-web on GitHub
 
 plugins:
   - search

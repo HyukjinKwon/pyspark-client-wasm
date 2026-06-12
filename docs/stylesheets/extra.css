@@ -1,0 +1,52 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Python-brand palette for Material for MkDocs (blue + yellow).
+   Activated by `primary: custom` / `accent: custom` in mkdocs.yml. */
+
+:root {
+  --pcw-python-blue: #306998;       /* classic Python blue */
+  --pcw-python-blue-light: #4b8bbe;
+  --pcw-python-blue-dark: #24507a;
+  --pcw-python-yellow: #ffd43b;      /* classic Python yellow */
+}
+
+/* Light + dark both use the Python-blue header. */
+[data-md-color-primary="custom"] {
+  --md-primary-fg-color: var(--pcw-python-blue);
+  --md-primary-fg-color--light: var(--pcw-python-blue-light);
+  --md-primary-fg-color--dark: var(--pcw-python-blue-dark);
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #ffffffb3;
+}
+
+/* Accent (links on hover, focus rings, selection) = Python yellow. */
+[data-md-color-accent="custom"] {
+  --md-accent-fg-color: #b9860b;            /* readable amber for hover text */
+  --md-accent-fg-color--transparent: #ffd43b26;
+  --md-accent-bg-color: #1a1a1a;
+}
+
+/* Body links: Python blue in light mode, a lighter blue in dark mode. */
+[data-md-color-scheme="default"] {
+  --md-typeset-a-color: var(--pcw-python-blue);
+}
+[data-md-color-scheme="slate"] {
+  --md-typeset-a-color: var(--pcw-python-blue-light);
+}
+
+/* A subtle Python-yellow underline accent under the hero h1 on the home page. */
+.md-typeset h1 {
+  font-weight: 700;
+  border-bottom: 3px solid var(--pcw-python-yellow);
+  display: inline-block;
+  padding-bottom: 0.15rem;
+}
+
+/* Slightly rounder, softer code blocks. */
+.md-typeset pre > code {
+  border-radius: 0.3rem;
+}
+
+/* Make the top tabs feel a touch more spacious. */
+.md-tabs__item {
+  font-weight: 600;
+}

@@ -3,6 +3,7 @@
   "jupyter-config-data": {
     "appName": "PySpark in JupyterLite",
     "appVersion": "0.1.0",
+    "exposeAppInBrowser": true,
     "litePluginSettings": {
       "@jupyterlite/pyodide-kernel-extension:kernel": {
         "pyodideUrl": "/pyodide/pyodide.js",

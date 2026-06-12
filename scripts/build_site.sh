@@ -31,8 +31,13 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 LITE_DIR="pyspark_connect_web/jupyterlite"
 
 # --- pinned build tooling --------------------------------------------------
-JUPYTERLITE_CORE_PIN="jupyterlite-core==0.6.4"
-JUPYTERLITE_PYODIDE_PIN="jupyterlite-pyodide-kernel==0.6.1"
+# jupyterlite-core / -pyodide-kernel are UNPINNED to pick up the latest release:
+# the 0.6.1 kernel spawned a CLASSIC worker, which Pyodide 314 rejects ("Classic
+# web workers are not supported"). Recent kernels use MODULE workers. We vendor
+# whatever Pyodide that kernel expects (derived below), so the kernel and the
+# standalone harness load the same same-origin, module-capable Pyodide.
+JUPYTERLITE_CORE_PIN="jupyterlite-core"
+JUPYTERLITE_PYODIDE_PIN="jupyterlite-pyodide-kernel"
 BUILD_PIN="build==1.2.2"
 
 log() { printf '[build_site] %s\n' "$*"; }
@@ -79,7 +84,18 @@ jupyter lite build \
 # /pyodide/pyodide.js) and the standalone harness (worker_bootstrap.js -> the
 # /pyodide/ index). The full dist also carries pyarrow/pandas/numpy/zstandard.
 # Skipped if already vendored (offline-friendly); needs network on first build.
-PYODIDE_VER="${PCW_PYODIDE_VERSION:-314.0.0}"
+# Use the EXACT Pyodide the installed jupyterlite-pyodide-kernel expects, so the
+# kernel finds its packages and the harness loads the same module-capable build.
+PYODIDE_VER="${PCW_PYODIDE_VERSION:-$(python3 - <<'PY' 2>/dev/null || true
+try:
+    from jupyterlite_pyodide_kernel.constants import PYODIDE_VERSION as v
+    print(v)
+except Exception:
+    pass
+PY
+)}"
+PYODIDE_VER="${PYODIDE_VER:-314.0.0}"
+log "kernel expects Pyodide ${PYODIDE_VER}"
 if [ -f "$OUTPUT_DIR/pyodide/pyodide.js" ]; then
   log "Pyodide already vendored at $OUTPUT_DIR/pyodide (skipping download)"
 else

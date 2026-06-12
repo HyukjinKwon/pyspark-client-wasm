@@ -104,7 +104,10 @@ jobs:
       - name: twine check (PyPI metadata + long-description render)
         run: |
           set -euxo pipefail
-          python -m pip install "twine==5.1.1"
+          # twine >= 6.1 (pkginfo >= 1.12) is required to parse Metadata-Version
+          # 2.4 emitted by modern setuptools; older twine reports a bogus
+          # "missing Name, Version".
+          python -m pip install "twine>=6.1.0"
           twine check dist/*
 
       - name: Resolve version (from the built dist; tag must match on a tag push)
@@ -157,7 +160,11 @@ jobs:
           python -m pip install \
             "build==1.2.2" \
             "jupyterlite-core==0.6.4" \
-            "jupyterlite-pyodide-kernel==0.6.1"
+            "jupyterlite-pyodide-kernel==0.6.1" \
+            "jupyter-server>=2,<3"
+          # jupyter-server is required by jupyterlite's `contents` addon, which
+          # build_site.sh uses (`jupyter lite build --contents`) to add the demo
+          # notebook; without it the build fails at post_build:contents.
 
       - name: Build wheel + JupyterLite site into _output
         env:

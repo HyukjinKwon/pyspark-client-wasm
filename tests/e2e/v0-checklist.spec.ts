@@ -67,6 +67,18 @@ test.beforeEach(async ({ page }, testInfo) => {
     );
     return;
   }
+  // Surface in-browser diagnostics in the CI log: console messages, page
+  // errors, and failed network requests (the exact reason a fetch died, e.g.
+  // CORS/net::ERR_*). Invaluable while stabilising the SAB/grpc-web round-trip.
+  page.on("console", (m) => console.log(`[browser:${m.type()}]`, m.text()));
+  page.on("pageerror", (e) => console.log("[browser:pageerror]", e.message));
+  page.on("requestfailed", (r) =>
+    console.log(
+      "[browser:requestfailed]",
+      r.url(),
+      r.failure()?.errorText ?? "",
+    ),
+  );
   await page.goto(BASE_URL);
 });
 

@@ -21,8 +21,11 @@
 const CONTROL_SLOTS = 8; // Int32 slots
 const DATA_BYTES = 16 * 1024 * 1024; // 16 MiB payload region
 
+// NOTE: pyarrow was DISABLED in Pyodide 0.28.0 (build issues) and re-enabled in
+// 0.29.2. v314.0.0 (the current stable) ships pyarrow 22.0.0 + zstandard 0.25.0
+// + pandas 3.0.2 + numpy 2.4.3 (Python 3.14), which is what we loadPackage below.
 const PYODIDE_INDEX_URL =
-  self.PCW_PYODIDE_INDEX_URL || "https://cdn.jsdelivr.net/pyodide/v0.28.0/full/";
+  self.PCW_PYODIDE_INDEX_URL || "https://cdn.jsdelivr.net/pyodide/v314.0.0/full/";
 
 // Packages Pyodide ships / we install. grpcio + grpcio-status are intentionally
 // absent (C-ext, not in Pyodide) - pyspark_connect_web's _grpc_shim stubs them.

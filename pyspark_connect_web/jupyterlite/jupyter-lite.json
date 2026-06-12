@@ -5,7 +5,7 @@
     "appVersion": "0.0.1.dev0",
     "litePluginSettings": {
       "@jupyterlite/pyodide-kernel-extension:kernel": {
-        "pyodideUrl": "https://cdn.jsdelivr.net/pyodide/v0.28.0/full/pyodide.js",
+        "pyodideUrl": "https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js",
         "loadPyodideOptions": {
           "packages": ["micropip", "pyarrow", "pandas", "numpy", "zstandard"]
         }

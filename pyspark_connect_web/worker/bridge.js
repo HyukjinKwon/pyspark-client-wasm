@@ -186,6 +186,7 @@ class Bridge {
     let timer = null;
     try {
       const { header, body } = this._readRequest();
+      console.log("[pcw bridge] rpc", header.kind, header.url, "body", body.length);
       const init = {
         method: "POST",
         headers: { ...header.headers },
@@ -237,6 +238,7 @@ class Bridge {
         /* Headers not iterable in some shims; leave empty. */
       }
 
+      console.log("[pcw bridge] resp", resp.status, "kind", header.kind);
       if (header.kind === "unary") {
         const buf = new Uint8Array(await resp.arrayBuffer());
         // One logical message, windowed if larger than the payload region.
@@ -266,15 +268,18 @@ class Bridge {
         }
         if (done) break;
         if (!value || value.length === 0) continue;
+        console.log("[pcw bridge] stream chunk", value.length);
         const metaBase = first ? { ok: resp.ok, headers } : {};
         const cont = await this._emitMessage(resp.status, metaBase, value);
         first = false;
         if (!cont) return; // worker abandoned the stream (closed / errored)
         // Wait for the worker to consume this message and request the next.
         const ack = await this._awaitWorker(S_CHUNK_ACK);
+        console.log("[pcw bridge] stream ack", ack);
         if (ack === S_IDLE) return;
       }
       // End of stream.
+      console.log("[pcw bridge] stream end (RESP_END)");
       Atomics.store(this.ctrl, C_LENGTH, 0);
       Atomics.store(this.ctrl, C_STATE, S_RESP_END);
       Atomics.notify(this.ctrl, C_STATE);

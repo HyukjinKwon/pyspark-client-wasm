@@ -308,13 +308,16 @@ class _SyncExecutor:
     it synchronously is correct (the SAB bridge serializes RPCs regardless)."""
 
     def submit(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        # NO-OP. pyspark submits ReleaseExecute here mid-ExecutePlan-stream.
+        # Running it inline (Pyodide has no threads) would re-enter the single
+        # SAB channel while the stream's Atomics state machine is active and
+        # deadlock. ReleaseExecute is best-effort server cleanup: the result is
+        # already received, and the server frees buffers on session/operation
+        # end, so skipping it is safe and keeps .collect() unblocked.
         from concurrent.futures import Future
 
         fut: "Future[Any]" = Future()
-        try:
-            fut.set_result(fn(*args, **kwargs))
-        except BaseException as exc:  # noqa: BLE001 - mirror to the future
-            fut.set_exception(exc)
+        fut.set_result(None)
         return fut
 
     def shutdown(self, *args: Any, **kwargs: Any) -> None:

@@ -18,7 +18,7 @@ export default defineConfig({
   testMatch: /.*\.spec\.ts/,
   // Pyodide cold start (loadPackage pyarrow/pandas + micropip pyspark + the
   // wheel) runs fresh on each test's page load and is slow.
-  timeout: 300_000,
+  timeout: 150_000,
   expect: { timeout: 30_000 },
   fullyParallel: false,
   reporter: process.env.CI ? "github" : "list",

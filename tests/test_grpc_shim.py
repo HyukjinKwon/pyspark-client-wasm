@@ -157,9 +157,17 @@ def test_build_grpc_status_to_status_raises():
 # install_grpc_shim — install / idempotency / no-op semantics
 # --------------------------------------------------------------------------- #
 def test_install_is_noop_when_real_grpcio_present():
-    """grpcio is installed in local dev / CI parity — install must NOT shadow it
-    and must return False (real grpcio present, nothing installed)."""
-    if importlib.util.find_spec("grpc") is None:
+    """grpcio is installed in local dev — install must NOT shadow it and must
+    return False (real grpcio present, nothing installed)."""
+    # If our own shim is the loaded ``grpc``, grpcio is by definition absent
+    # (the shim only installs when grpcio is missing — e.g. CI's unit job /
+    # Pyodide), so this "no-op when present" path isn't testable here. Detecting
+    # the shim marker is necessary because the stub now carries a valid
+    # __spec__, so find_spec("grpc") alone no longer reveals grpcio's absence.
+    loaded = sys.modules.get("grpc")
+    if getattr(loaded, "__pcw_shim__", False):
+        pytest.skip("our grpc shim is active => real grpcio is absent")
+    if loaded is None and importlib.util.find_spec("grpc") is None:
         pytest.skip("grpcio absent in this environment; no-op path not testable")
     # Drop any cached module first so the function takes the find_spec branch.
     saved = sys.modules.pop("grpc", None)

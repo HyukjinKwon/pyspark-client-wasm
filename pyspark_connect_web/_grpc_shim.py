@@ -13,6 +13,7 @@ CI parity runs), so we never shadow the genuine library when it is present.
 from __future__ import annotations
 
 import enum
+import importlib.machinery
 import importlib.util
 import sys
 import types
@@ -24,6 +25,11 @@ class _ShimError(RuntimeError):
 
 def _build_module() -> types.ModuleType:
     m = types.ModuleType("grpc")
+    # A real ModuleSpec: types.ModuleType leaves __spec__ = None, and
+    # importlib.util.find_spec / the import machinery raise
+    # "grpc.__spec__ is None" when they encounter a spec-less module in
+    # sys.modules. Giving it a spec keeps both happy.
+    m.__spec__ = importlib.machinery.ModuleSpec("grpc", loader=None)
     m.__doc__ = "Minimal grpc shim installed by pyspark_connect_web (no grpcio in Pyodide)."
     m.__pcw_shim__ = True  # marker so we can detect/uninstall our own shim
     # PySpark's check_dependencies() compares grpc.__version__ against its
@@ -118,10 +124,19 @@ def _build_grpc_status_modules():
     status message, which our grpc-web trailer already carries.
     """
     pkg = types.ModuleType("grpc_status")
+    # Mark as a package (it has the rpc_status submodule) with a real spec, so
+    # `from grpc_status import rpc_status` and find_spec never hit a None spec.
+    pkg_spec = importlib.machinery.ModuleSpec("grpc_status", loader=None)
+    pkg_spec.submodule_search_locations = []
+    pkg.__spec__ = pkg_spec
+    pkg.__path__ = []
     pkg.__pcw_shim__ = True
     pkg.__version__ = "1.76.0"
 
     rpc_status = types.ModuleType("grpc_status.rpc_status")
+    rpc_status.__spec__ = importlib.machinery.ModuleSpec(
+        "grpc_status.rpc_status", loader=None
+    )
     rpc_status.__pcw_shim__ = True
 
     def from_call(_call):

@@ -26,7 +26,11 @@ import pandas as pd
 import pytest
 
 import pyspark_connect_web as pcw
-from tests.integration.bridge import GrpcWebBridgeChannel
+
+# Relative import: this module is collected as part of the `integration` package
+# (tests/integration/__init__.py), so `.bridge` resolves regardless of whether
+# the repo root / `tests` is on sys.path (which it is not, in CI's import mode).
+from .bridge import GrpcWebBridgeChannel
 
 # Native (real grpcio) Connect client, used as the parity ground truth.
 from pyspark.sql.connect.session import SparkSession as ConnectSparkSession

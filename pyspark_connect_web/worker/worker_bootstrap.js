@@ -76,8 +76,10 @@ async function boot() {
   dataSab = new SharedArrayBuffer(DATA_BYTES);
   self.postMessage({ type: "pcw_sab", control: controlSab, data: dataSab });
 
-  importScripts(PYODIDE_INDEX_URL + "pyodide.js");
-  // eslint-disable-next-line no-undef
+  // MODULE worker: recent Pyodide (v314.x) refuses classic workers ("Classic
+  // web workers are not supported"), so load the ESM build via dynamic import
+  // (not importScripts, which does not exist in a module worker anyway).
+  const { loadPyodide } = await import(PYODIDE_INDEX_URL + "pyodide.mjs");
   pyodide = await loadPyodide({ indexURL: PYODIDE_INDEX_URL });
 
   await pyodide.loadPackage(PURE_PYODIDE_PKGS);

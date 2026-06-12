@@ -34,9 +34,11 @@
         console.log("[pcw harness]", s);
       };
 
-      // CLASSIC worker: worker_bootstrap.js uses importScripts() to load
-      // Pyodide, which does not exist in a module worker.
-      const worker = new Worker("/worker/worker_bootstrap.js");
+      // MODULE worker: recent Pyodide refuses classic workers, and
+      // worker_bootstrap.js loads Pyodide via dynamic import (ESM).
+      const worker = new Worker("/worker/worker_bootstrap.js", {
+        type: "module",
+      });
       installBridge(worker); // attaches the SAB on pcw_sab, drives pcw_rpc
 
       // pcw_run request/response correlation.

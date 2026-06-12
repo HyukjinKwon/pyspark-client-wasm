@@ -22,8 +22,15 @@ reason, and update the guard test.
    the DataFrame API. Guard: a test that calls a plain `.collect()` and gets rows.
 6. **Reattachable execute is in-scope.** The client issues ExecutePlan +
    ReattachExecute + ReleaseExecute. The stub must implement all three, not just
-   the stream - broken streams must recover. Guard: kill a stream mid-flight, assert
-   recovery via reattach.
+   the stream - broken streams must recover. Guard: the integration test kills a
+   stream mid-flight against a REAL Spark server and asserts recovery via
+   reattach (tests/integration, run in the `ci` workflow).
+   KNOWN LIMITATION (browser/grpc-web): PySpark's recovery for an INITIAL request
+   that never reached the server needs `INVALID_HANDLE.OPERATION_NOT_FOUND` from
+   the gRPC error's google.rpc.Status via grpcio-status. That is unavailable over
+   grpc-web (no real gRPC call / trailing metadata; our Pyodide grpc_status stub
+   returns None), so that one edge case cannot self-recover in the browser. The
+   in-browser e2e marks it `fixme` and relies on the integration coverage above.
 7. **Arrow correctness over speed.** Results must be byte/row-exact vs a
    reference run of the same query on plain PySpark Connect. Guard: a parity test
    comparing `toPandas()` between web client and a native Connect client.

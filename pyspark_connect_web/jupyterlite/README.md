@@ -33,7 +33,7 @@ jupyter lite serve --output-dir _output
 default. For local dev use a server that honours `_headers`, or the tiny helper
 below; lane 5's Envoy/compose sets them for the hosted e2e.
 
-## Cross-origin isolation (mandatory — DECISIONS.md #4)
+## Cross-origin isolation (mandatory - DECISIONS.md #4)
 
 `SharedArrayBuffer` and `Atomics.wait` only exist when the page is
 **cross-origin isolated**:
@@ -50,7 +50,7 @@ non-shared buffer.
 ## Local dev server with the right headers
 
 ```python
-# serve_coi.py — python http server that sets COOP/COEP
+# serve_coi.py - python http server that sets COOP/COEP
 import http.server, functools
 class H(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
@@ -66,7 +66,7 @@ The pyodide kernel (`@jupyterlite/pyodide-kernel`) runs Pyodide in **its own**
 ES-module Web Worker; we cannot replace it. We integrate non-invasively, in two
 halves:
 
-- **Page side — `pcw_kernel_bridge.js`.** Loaded *before* the JupyterLite app
+- **Page side - `pcw_kernel_bridge.js`.** Loaded *before* the JupyterLite app
   bundle (see "Load order" below), it wraps the global `Worker` constructor so
   every kernel worker the app spawns gets a `Bridge` (from `../worker/bridge.js`)
   attached. The Bridge does the real cross-origin `fetch` and writes response
@@ -74,7 +74,7 @@ halves:
   `{__pcw__:{...}}` and ignores the kernel's own message framing (comlink /
   coincident), so the two coexist.
 
-- **Worker side — `pyspark_connect_web.worker.kernel_bootstrap`.** Imported once
+- **Worker side - `pyspark_connect_web.worker.kernel_bootstrap`.** Imported once
   inside the kernel (the demo's `import pyspark_connect_web; pcw.install()` is
   enough). `SabSyncChannel` auto-detects it is in a kernel worker (Pyodide, no
   `js.__pcw_register_sab` hook) and uses `transport="kernel"`: it allocates the
@@ -101,13 +101,13 @@ bundle. With the CLI, place an `index.template.html` (or use
 </head>
 ```
 
-## Hosting matrix — which host needs what
+## Hosting matrix - which host needs what
 
 | Host | Can set headers? | What to do |
 |---|---|---|
 | Lane 5 Envoy / `docker compose` (local e2e) | yes | Serves COOP/COEP directly (`deploy/`). Nothing extra. |
 | Netlify / Cloudflare Pages | yes (via `_headers`) | Ship `_headers` (already provided). No service worker needed. |
-| **GitHub Pages** | **no** | **Use `coi-serviceworker.js`** — include it as a `<script>` before everything; it injects COOP/COEP via a service worker and reloads once so `crossOriginIsolated` becomes true. |
+| **GitHub Pages** | **no** | **Use `coi-serviceworker.js`** - include it as a `<script>` before everything; it injects COOP/COEP via a service worker and reloads once so `crossOriginIsolated` becomes true. |
 | `python -m http.server` (dev) | no | Use the `serve_coi.py` snippet above, or `coi-serviceworker.js`. |
 
 **COEP caveat (all isolated hosts):** `require-corp` blocks any *cross-origin*
@@ -125,4 +125,4 @@ into the site root and point `pyodideUrl`/`PCW_WHEEL_URL` at them.
   Envoy). CORS on Envoy must allow the lite origin (lane 5 owns that).
 - **Real-browser validation**: the kernel `Worker`-wrap + SAB handshake +
   `crossOriginIsolated` can only be confirmed in a cross-origin-isolated browser
-  with lane 5's stack up — see `team/findings-lane3-bridge.md` "needs a browser".
+  with lane 5's stack up - see `team/findings-lane3-bridge.md` "needs a browser".

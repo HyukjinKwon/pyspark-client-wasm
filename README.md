@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# pyspark-connect-web — PySpark in JupyterLite
+# pyspark-connect-web - PySpark in JupyterLite
 
 [![CI](https://github.com/HyukjinKwon/pyspark-client-wasm/actions/workflows/ci.yml/badge.svg)](https://github.com/HyukjinKwon/pyspark-client-wasm/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pyspark-connect-web.svg)](https://pypi.org/project/pyspark-connect-web/)
@@ -9,7 +9,7 @@
 
 Run the **real** PySpark Connect Python client inside a browser
 (JupyterLite/Pyodide), talking to an Apache Spark Connect server through a
-grpc-web transport. Your existing PySpark code runs unchanged — no
+grpc-web transport. Your existing PySpark code runs unchanged - no
 reimplementation, no local JVM, no Python backend server.
 
 ```python
@@ -31,21 +31,21 @@ PySpark's Connect client is pure Python above a single gRPC stub: it builds
 protobuf plans and ships them to the server. We **monkey-patch only that stub**
 with a grpc-web/`fetch` transport, and make calls blocking via a Web Worker +
 `Atomics`/`SharedArrayBuffer` bridge so `.collect()` returns data synchronously.
-Everything above the stub — DataFrame, Column, functions — is untouched. We
+Everything above the stub - DataFrame, Column, functions - is untouched. We
 patch; we do not fork PySpark. See [`docs/architecture.md`](docs/architecture.md).
 
 ## Requirements
 
 * A browser (for the client) **or** Python 3.11+ (for local dev/tests).
-* In the browser: Pyodide ≥ 0.28 (Python 3.13), which already ships
+* In the browser: Pyodide >= 0.28 (Python 3.13), which already ships
   `pyarrow`, `pandas`, `protobuf`, and `numpy`. **`grpcio` is not available in
-  Pyodide and is never imported** — all transport is grpc-web over `fetch`.
+  Pyodide and is never imported** - all transport is grpc-web over `fetch`.
 * `pyspark>=4.0,<4.2` (pinned by `install()`; provided by Pyodide in the browser).
-* A running Spark Connect server (Spark 4.x) behind an Envoy grpc-web proxy —
+* A running Spark Connect server (Spark 4.x) behind an Envoy grpc-web proxy -
   the [`deploy/`](deploy/) stack brings this up for you.
 * The JupyterLite page must be **cross-origin isolated** (`COOP: same-origin` +
   `COEP: require-corp`), which the deploy stack serves for you. Without it,
-  `SharedArrayBuffer` — the backbone of the blocking bridge — is unavailable.
+  `SharedArrayBuffer` - the backbone of the blocking bridge - is unavailable.
 
 ## Installation
 
@@ -105,7 +105,7 @@ spark = SparkSession.builder.remote("sc://localhost:8081/;transport=grpcweb").ge
 The connection string is the standard Spark Connect `sc://` URI with a
 `transport=grpcweb` parameter. A plain `https://`/`http://` shorthand is also
 accepted. For anything past localhost, terminate **TLS** at the proxy and use a
-secure context — a browser needs HTTPS for `crossOriginIsolated` off localhost.
+secure context - a browser needs HTTPS for `crossOriginIsolated` off localhost.
 
 For **TLS + auth** (the hardened prod overlay), the proxy is the enforcement
 point: it gates on `Authorization: Bearer <token>` and forwards the header
@@ -118,7 +118,7 @@ docker compose -f deploy/compose.yaml -f deploy/compose.prod.yaml up -d
 ```
 
 See [`docs/connection-patterns.md`](docs/connection-patterns.md) and
-[`deploy/README.md`](deploy/README.md) (TLS, CORS allowlist, bearer-token gate →
+[`deploy/README.md`](deploy/README.md) (TLS, CORS allowlist, bearer-token gate ->
 `jwt_authn`/`ext_authz`).
 
 ## A quick tour
@@ -145,12 +145,12 @@ python examples/quickstart.py
 
 Full docs: <https://hyukjinkwon.github.io/pyspark-client-wasm/>
 
-* [Architecture](docs/architecture.md) — the stub seam, the sync bridge, the wire framing.
+* [Architecture](docs/architecture.md) - the stub seam, the sync bridge, the wire framing.
 * [Quickstart](docs/quickstart.md) and [Running locally](docs/running-locally.md).
-* [Connection patterns](docs/connection-patterns.md) — `sc://` URIs, TLS, auth.
+* [Connection patterns](docs/connection-patterns.md) - `sc://` URIs, TLS, auth.
 * [Installation](docs/installation.md) and [JupyterLite hosting](docs/jupyterlite-hosting.md).
 * [Packaging & release](docs/packaging-release.md).
-* [Security](docs/security.md) — threat model (cross-origin isolation, CORS, auth, untrusted server, notebook XSS).
+* [Security](docs/security.md) - threat model (cross-origin isolation, CORS, auth, untrusted server, notebook XSS).
 
 ## Compatibility
 
@@ -158,11 +158,11 @@ Full docs: <https://hyukjinkwon.github.io/pyspark-client-wasm/>
 |-----------|-----------|
 | PySpark | `>=4.0,<4.2` (Connect default; reattachable execute present). `install()` raises outside the range. |
 | Spark Connect server | Spark 4.x (`apache/spark:4.0.0` in the deploy stack) |
-| Pyodide | ≥ 0.28 (Python 3.13) in the browser; Python 3.11+ for local dev |
+| Pyodide | >= 0.28 (Python 3.13) in the browser; Python 3.11+ for local dev |
 | Proxy | Envoy with `envoy.filters.http.grpc_web` (`v1.31-latest`) |
 
-The v0 target is full read-path parity — `range/select/filter/groupBy/agg`,
-`toPandas`, `createDataFrame`, and `spark.sql(...)` — returning results
+The v0 target is full read-path parity - `range/select/filter/groupBy/agg`,
+`toPandas`, `createDataFrame`, and `spark.sql(...)` - returning results
 byte/row-exact versus a native Spark Connect run. See [`DECISIONS.md`](DECISIONS.md).
 
 ## Development
@@ -192,7 +192,7 @@ the lane/coordination model: [`CONTRIBUTING.md`](CONTRIBUTING.md) and
 
 ## License
 
-Apache License 2.0 — see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+Apache License 2.0 - see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
 
 Independent project; not an Apache Software Foundation project. "Apache Spark",
 "Spark", and "PySpark" are trademarks of the Apache Software Foundation, used

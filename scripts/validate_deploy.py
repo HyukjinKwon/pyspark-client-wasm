@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Static validation of the deploy/ configs — no Docker, no network.
+"""Static validation of the deploy/ configs - no Docker, no network.
 
 Checks that every Envoy/compose YAML parses, and that the mandatory
 cross-origin-isolation headers (DECISIONS.md #4) are present in BOTH the dev and

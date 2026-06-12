@@ -13,8 +13,8 @@ worker with ``Atomics.wait`` until the response is written back. Outside Pyodide
 can be exercised without a browser, ``grpcio``, or a network.
 
 The JS glue lives next to this module:
-  * ``bridge.js``           — main-thread fetch handler (request -> fetch -> SAB)
-  * ``worker_bootstrap.js`` — loads Pyodide, micropip-installs the wheel, wires
+  * ``bridge.js``           - main-thread fetch handler (request -> fetch -> SAB)
+  * ``worker_bootstrap.js`` - loads Pyodide, micropip-installs the wheel, wires
                               the SAB + ``Atomics.wait`` protocol.
 
 The exact SAB layout and Atomics handshake are documented in

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# gen_dev_cert.sh — generate a SELF-SIGNED TLS cert for STAGING/local-TLS testing
+# gen_dev_cert.sh - generate a SELF-SIGNED TLS cert for STAGING/local-TLS testing
 # of the prod Envoy overlay. NOT for production: browsers will warn, and a
 # self-signed cert is not a secure context users should trust. Use a real cert
 # (Let's Encrypt / your CA) in production.
@@ -28,4 +28,4 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
 
 chmod 600 "$CERT_DIR/tls.key"
 echo "[gen_dev_cert] wrote $CERT_DIR/tls.crt and tls.key (CN=${HOST}, self-signed)"
-echo "[gen_dev_cert] WARNING: self-signed — staging/testing only, never production."
+echo "[gen_dev_cert] WARNING: self-signed - staging/testing only, never production."

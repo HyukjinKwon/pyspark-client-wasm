@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# render_envoy_prod.sh — produce a deploy-ready envoy.prod.yaml with your real
+# render_envoy_prod.sh - produce a deploy-ready envoy.prod.yaml with your real
 # public host + allowed CORS origin substituted in, instead of editing the
 # checked-in template by hand.
 #
@@ -11,7 +11,7 @@
 #   scripts/render_envoy_prod.sh > deploy/envoy.prod.rendered.yaml
 #
 # Then point compose at the rendered file (or bind-mount it as envoy.prod.yaml).
-# The rendered file is gitignored output — do not commit secrets/origins.
+# The rendered file is gitignored output - do not commit secrets/origins.
 
 set -euo pipefail
 

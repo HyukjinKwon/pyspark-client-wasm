@@ -8,14 +8,14 @@
 //
 // SKIP SEMANTICS (graceful degradation):
 //   * beforeAll probes the JupyterLite page. If the stack is DOWN, every test
-//     is skipped — unless E2E_REQUIRE_STACK=1, which turns "down" into a hard
+//     is skipped - unless E2E_REQUIRE_STACK=1, which turns "down" into a hard
 //     failure (the CI gate to flip once the stack lands).
 //   * The crossOriginIsolated test needs only server headers and runs whenever
 //     the page is up.
 //   * The bridge-dependent tests additionally require window.__pcwRunPython.
 //     If the page is up but the bridge is not wired yet (e.g. the JupyterLite
 //     kernel integration in team/findings-lane3-bridge.md #1 is still pending),
-//     they skip with a clear reason — unless E2E_REQUIRE_STACK=1, where a
+//     they skip with a clear reason - unless E2E_REQUIRE_STACK=1, where a
 //     missing bridge is a hard failure.
 //
 // Mapping to DECISIONS.md "v0 done =":
@@ -96,13 +96,13 @@ async function gateBridge(page: import("@playwright/test").Page, testInfo: impor
 }
 
 // ---------------------------------------------------------------------------
-// 1. crossOriginIsolated === true  — server headers only (no bridge needed)
+// 1. crossOriginIsolated === true  - server headers only (no bridge needed)
 // ---------------------------------------------------------------------------
 test("crossOriginIsolated is true on the JupyterLite page", async ({ page }) => {
   const isolated = await crossOriginIsolated(page);
   expect(
     isolated,
-    "crossOriginIsolated must be true — check Cross-Origin-Opener-Policy: " +
+    "crossOriginIsolated must be true - check Cross-Origin-Opener-Policy: " +
       "same-origin and Cross-Origin-Embedder-Policy: require-corp on the static host",
   ).toBe(true);
 });
@@ -121,7 +121,7 @@ test("spark.range(10).collect() returns 10 rows", async ({ page }, testInfo) => 
 
 // ---------------------------------------------------------------------------
 // 3. filter/select/groupBy/agg toPandas matches the native reference
-//    (DECISIONS.md #7 — byte/row exact vs a native Connect run). The query
+//    (DECISIONS.md #7 - byte/row exact vs a native Connect run). The query
 //    MUST match tests/e2e/reference.py::build_reference exactly.
 // ---------------------------------------------------------------------------
 test("filter/groupBy/agg toPandas matches reference", async ({ page }, testInfo) => {

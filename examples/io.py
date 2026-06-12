@@ -2,7 +2,7 @@
 """I/O: createDataFrame from pandas + schema round-trip via Arrow.
 
 Exercises lane 4's encode_local_relation (request side) and Arrow decode
-(result side) — the same path the browser uses.
+(result side) - the same path the browser uses.
 
 Run locally:  SPARK_REMOTE=sc://localhost:15002 python io.py
 """

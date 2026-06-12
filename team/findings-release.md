@@ -1,18 +1,18 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# findings — release automation (RELEASE agent)
+# findings - release automation (RELEASE agent)
 
 Owns: `.github/workflows/release.yml`, `CHANGELOG.md`. Does NOT edit `ci.yml`,
-`pyproject.toml`, `docs/`, or any package source — snippets for the integrator
+`pyproject.toml`, `docs/`, or any package source - snippets for the integrator
 are below.
 
 ## What landed
 
-- **`.github/workflows/release.yml`** — tag-driven publish, modelled on the
+- **`.github/workflows/release.yml`** - tag-driven publish, modelled on the
   maintainer's sibling release flows (semver tag -> build language package ->
   publish to the language registry -> GitHub Release from CHANGELOG). For Python
   the registry is PyPI via **OIDC trusted publishing** (no API token in secrets).
-- **`CHANGELOG.md`** — Keep a Changelog format, `[Unreleased]` + a `[0.1.0]`
+- **`CHANGELOG.md`** - Keep a Changelog format, `[Unreleased]` + a `[0.1.0]`
   first entry. The release runbook lives in an HTML comment inside it (docs/ is
   the DOCS agent's; this keeps the runbook traveling with the changelog).
 
@@ -29,7 +29,7 @@ Trigger: push of a tag matching `v*` (e.g. `v0.1.0`).
      `grpcio` entry.
    - `twine check dist/*` (metadata + long-description render).
    - Resolves `version` from the wheel filename and, on a tag push, HARD-FAILS if
-     `${tag#v} != version` — tag and `pyproject.toml` version must agree.
+     `${tag#v} != version` - tag and `pyproject.toml` version must agree.
    - Uploads `dist/*` as an artifact; exposes `version` as a job output.
 
 2. **`site`** (parallel to build)
@@ -49,7 +49,7 @@ Trigger: push of a tag matching `v*` (e.g. `v0.1.0`).
 4. **`github-release`** (needs build+publish-pypi; if tag push only)
    - `permissions: contents: write`.
    - `awk` extracts the `^## \[X.Y.Z\]` section from `CHANGELOG.md` until the next
-     `## [` (validated locally on `[0.1.0]` — 48 lines, stops cleanly).
+     `## [` (validated locally on `[0.1.0]` - 48 lines, stops cleanly).
    - `softprops/action-gh-release@v2`: Release `vX.Y.Z`, body = those notes,
      assets = `dist/*` + the site `.tgz`. `prerelease` auto-true for dev/rc/a/b.
 
@@ -67,7 +67,7 @@ Pinned actions: `actions/checkout@v4`, `actions/setup-python@v5`,
   `0.1.0` is the first release (repo currently at `0.0.1.dev0`).
 - Release = annotated tag `vX.Y.Z` (`v` prefix matches the sibling Ruby/Scala
   projects). `build` enforces tag-vs-version agreement.
-- Pre-releases `vX.Y.ZrcN`/`…devN` flow through unchanged and are auto-marked
+- Pre-releases `vX.Y.ZrcN`/`...devN` flow through unchanged and are auto-marked
   `prerelease` on the GitHub Release.
 
 ## Validated here vs. only on a real tag push
@@ -95,7 +95,7 @@ Only on a real tag push / dispatch (network + GitHub identity):
 
 Append under `jobs:`. Makes the real Spark-Connect round-trip a continuous gate.
 `grpcio`/`grpcio-status` are installed ONLY for the test bridge (under `tests/`,
-outside the package — DECISIONS.md #1 allows it).
+outside the package - DECISIONS.md #1 allows it).
 
 ```yaml
   integration:
@@ -126,7 +126,7 @@ outside the package — DECISIONS.md #1 allows it).
 ### 2. `pyproject.toml` additions
 
 `[project.urls]` (README leaves the repo name undecided; these use the sibling-
-project org placeholder — confirm/adjust the repo slug, and keep CHANGELOG.md's
+project org placeholder - confirm/adjust the repo slug, and keep CHANGELOG.md's
 compare/tag links in sync):
 
 ```toml
@@ -140,7 +140,7 @@ Version source: the current static `version = "..."` in `[project]` is the singl
 source of truth and works as-is (the tag-vs-version guard enforces agreement).
 **No change required.** If tag-derived versioning is wanted later, switch to a
 dynamic backend (e.g. `setuptools-scm` + `dynamic = ["version"]`), but that
-changes the wheel-name->version derivation `release.yml` relies on — coordinate
+changes the wheel-name->version derivation `release.yml` relies on - coordinate
 first. Static-version path recommended for now.
 
 ### 3. Optional, related

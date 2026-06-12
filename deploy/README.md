@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# deploy/ — Spark Connect + Envoy grpc-web proxy
+# deploy/ - Spark Connect + Envoy grpc-web proxy
 
 This directory brings up the server side of **pyspark-connect-web**: a Spark 4.x
 Connect server fronted by an Envoy `grpc_web` proxy, plus a static host for the
@@ -8,10 +8,10 @@ JupyterLite site that serves the mandatory cross-origin-isolation headers.
 
 ```
 browser (JupyterLite/Pyodide, lane 3)
-   │  sc://localhost:8081/;transport=grpcweb   (grpc-web over fetch)
-   ▼
-Envoy :8081  ──grpc_web filter──▶  Spark Connect :15002 (gRPC/HTTP2)
-Envoy :8000  ── static site (COOP/COEP) ──▶  JupyterLite (./_output)
+   |  sc://localhost:8081/;transport=grpcweb   (grpc-web over fetch)
+   v
+Envoy :8081  --grpc_web filter-->  Spark Connect :15002 (gRPC/HTTP2)
+Envoy :8000  -- static site (COOP/COEP) -->  JupyterLite (./_output)
 ```
 
 ## Ports
@@ -47,7 +47,7 @@ crossOriginIsolated === true   // must be true, or SharedArrayBuffer is unavaila
 ```
 
 The JupyterLite site is produced by lane 3 (`jupyterlite build` into `../_output`).
-Until that exists, the `:8000` host comes up but serves 404s — the grpc-web proxy
+Until that exists, the `:8000` host comes up but serves 404s - the grpc-web proxy
 and Spark Connect server still work and can be exercised by `tests/e2e/reference.py`.
 
 ## Image / version pins
@@ -82,7 +82,7 @@ docker compose -f deploy/compose.yaml -f deploy/compose.prod.yaml up -d
 | Transport | plaintext HTTP | TLS (HTTPS/wss), `TLSv1_2`+ |
 | Ports | 8081 grpc-web, 8000 static, 9901 admin | 8443 grpc-web, 8444 static, 8089 probe; admin loopback-only |
 | CORS | wildcard `.*` | explicit origin allowlist (`exact:`), no wildcard |
-| Auth | none | bearer-token gate (Lua) → replace with jwt_authn/ext_authz |
+| Auth | none | bearer-token gate (Lua) -> replace with jwt_authn/ext_authz |
 | Request size | unbounded | 32 MiB per-connection buffer + bounded headers |
 | Spark gRPC | published `15002:15002` | **not** published (private) |
 | Health/ready | (Envoy admin) | dedicated `:8089` `/healthz` + `/ready` |
@@ -102,13 +102,13 @@ COOP/COEP go missing or the prod CORS regresses to a wildcard.
 #   deploy/certs/tls.crt   (full chain)
 #   deploy/certs/tls.key   (private key, chmod 600)
 
-# Staging / local TLS testing only — self-signed (browsers will warn):
+# Staging / local TLS testing only - self-signed (browsers will warn):
 PCW_PUBLIC_HOST=localhost scripts/gen_dev_cert.sh
 ```
 
 For Kubernetes, mount a TLS `Secret` at the same path instead of the bind mount.
 A browser needs a **secure context** for `crossOriginIsolated` off localhost, so
-prod must be HTTPS — a self-signed cert that the browser rejects will also break
+prod must be HTTPS - a self-signed cert that the browser rejects will also break
 cross-origin isolation.
 
 ## Setting your origins (prod)
@@ -123,15 +123,15 @@ PCW_LITE_ORIGIN=https://lite.example.com \
 scripts/render_envoy_prod.sh > deploy/envoy.prod.rendered.yaml
 ```
 
-## Auth (prod) — Spark Connect has no built-in auth
+## Auth (prod) - Spark Connect has no built-in auth
 
 The proxy is the enforcement point. The shipped Lua filter rejects any request
 without `Authorization: Bearer <token>` (401), letting CORS preflights through.
 **It does not validate the token.** For production, replace it with
 `envoy.filters.http.jwt_authn` (validate a JWT against your IdP's JWKS) or
-`envoy.filters.http.ext_authz` (delegate to an authz service) — both are sketched
+`envoy.filters.http.ext_authz` (delegate to an authz service) - both are sketched
 at the bottom of `envoy.prod.yaml`. The `authorization` header is forwarded
-upstream so a Spark-side interceptor can re-check. See `docs/security.md` §3.
+upstream so a Spark-side interceptor can re-check. See `docs/security.md` section 3.
 
 ## Health / readiness (prod)
 

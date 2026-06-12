@@ -37,7 +37,7 @@ which is racy across an already-blocked worker). Instead the response side uses
 **bounded-window transfer**: the main thread writes ``min(remaining, capacity)``
 bytes per ``RESP_CHUNK``, marks ``meta.more`` while bytes remain, and the worker
 acknowledges each window (the existing CHUNK_ACK ping-pong) and reassembles. A
-single logical payload — a unary body, or one server-stream chunk — that exceeds
+single logical payload - a unary body, or one server-stream chunk - that exceeds
 the data region is therefore delivered across several windows with no realloc.
 
 A *realloc* negotiation is also supported for the rare case where the host wants
@@ -61,7 +61,7 @@ from pyspark_connect_web._contract import HttpResponse
 class TransportError(RuntimeError):
     """A request failed at the transport (browser/fetch/SAB) layer.
 
-    This is *not* a gRPC-status error — those are carried in the response body's
+    This is *not* a gRPC-status error - those are carried in the response body's
     trailer frame and are lane 1's concern. This is a hard transport failure
     (network error, main thread gone, SAB protocol violation, isolation missing).
 
@@ -69,7 +69,7 @@ class TransportError(RuntimeError):
     cause of a failed ``.collect()``. For HTTP-level failures we still hand lane
     1 a valid :class:`HttpResponse` (with the non-200 ``status`` and any
     ``grpc-status`` headers) so it can raise the *correct*
-    ``SparkConnectGrpcException`` rather than an opaque transport error — see
+    ``SparkConnectGrpcException`` rather than an opaque transport error - see
     :meth:`_AtomicsBackend.unary`.
     """
 
@@ -83,7 +83,7 @@ class TransportAborted(TransportError):
 
 
 # --------------------------------------------------------------------------- #
-# Backend protocol — the seam between SabSyncChannel and "how bytes move"
+# Backend protocol - the seam between SabSyncChannel and "how bytes move"
 # --------------------------------------------------------------------------- #
 @runtime_checkable
 class SyncBackend(Protocol):
@@ -148,7 +148,7 @@ class SabSyncChannel:
         into the actual fetch URL.
     backend:
         A :class:`SyncBackend`. If ``None``, one is auto-selected:
-        :class:`_AtomicsBackend` under Pyodide, otherwise we raise — local
+        :class:`_AtomicsBackend` under Pyodide, otherwise we raise - local
         callers (tests) MUST inject a fake, because there is no network here.
     sab:
         Optional pre-allocated control/data SharedArrayBuffer pair for the
@@ -227,7 +227,7 @@ class SabSyncChannel:
 
 # --------------------------------------------------------------------------- #
 # Protocol constants (single source of truth, mirrored by value in bridge.js
-# and worker_bootstrap.js — see team/findings-lane3-bridge.md).
+# and worker_bootstrap.js - see team/findings-lane3-bridge.md).
 # --------------------------------------------------------------------------- #
 # Control array indices
 _C_STATE = 0
@@ -261,7 +261,7 @@ _META_ZONE = 4096
 
 class _AtomicsBackend:
     """Pyodide-only backend. Imports ``js`` lazily so this module imports fine
-    on CPython (where the import would fail) — keeping the file unit-testable.
+    on CPython (where the import would fail) - keeping the file unit-testable.
 
     The heavy lifting (allocating SABs, performing fetch, framing the response)
     is split between this class and ``bridge.js`` / ``worker_bootstrap.js``. This
@@ -286,9 +286,9 @@ class _AtomicsBackend:
         self._json = json
         self._base_url = base_url
         # How we announce the SAB to the main thread and nudge it per RPC:
-        #   "standalone": worker_bootstrap.js harness — js.__pcw_register_sab +
+        #   "standalone": worker_bootstrap.js harness - js.__pcw_register_sab +
         #                 postMessage({type:"pcw_rpc"}).
-        #   "kernel":     JupyterLite pyodide kernel worker — post a namespaced
+        #   "kernel":     JupyterLite pyodide kernel worker - post a namespaced
         #                 envelope postMessage({__pcw__:{type:"sab"|"rpc",...}})
         #                 so the kernel's comlink/coincident framing ignores it
         #                 and pcw_kernel_bridge.js (page side) picks it up.
@@ -299,7 +299,7 @@ class _AtomicsBackend:
         self._transport = transport
 
         if not getattr(js, "crossOriginIsolated", False):
-            # DECISIONS.md #4: SAB requires COOP/COEP. Fail loudly and early —
+            # DECISIONS.md #4: SAB requires COOP/COEP. Fail loudly and early -
             # Atomics.wait on a non-shared buffer would either throw or, worse,
             # silently busy-spin. The demo asserts this too.
             raise TransportError(
@@ -436,7 +436,7 @@ class _AtomicsBackend:
         ack (CHUNK_ACK) and wait for the next window; otherwise stop. This is how
         a single response larger than the data SAB is delivered without realloc.
 
-        Returns ``(first_meta, joined_payload)`` — the *first* window's meta (it
+        Returns ``(first_meta, joined_payload)`` - the *first* window's meta (it
         carries ``headers``/``status`` context; continuation windows only carry
         ``{"more": ...}``).
         """
@@ -500,9 +500,9 @@ class _AtomicsBackend:
                 headers = dict(meta_first.get("headers") or {})
             else:
                 body, headers = b"", {}
-            # HTTP errors (status >= 400) are NOT a transport failure — hand lane
+            # HTTP errors (status >= 400) are NOT a transport failure - hand lane
             # 1 a valid HttpResponse with the status + any grpc-status headers so
-            # it raises the right SparkConnectGrpcException (API_CONTRACT.md §1).
+            # it raises the right SparkConnectGrpcException (API_CONTRACT.md section 1).
             return HttpResponse(status=status, headers=headers, body=body)
         finally:
             self._js.Atomics.store(self._ctrl, _C_STATE, _S_IDLE)

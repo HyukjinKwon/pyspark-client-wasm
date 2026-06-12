@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# e2e.yml — the REAL headless-browser end-to-end gate for pyspark-connect-web.
+# e2e.yml - the REAL headless-browser end-to-end gate for pyspark-connect-web.
 #
 # This is the one thing that cannot be verified in the maintainer's local sandbox
 # (no network, no docker there). GitHub-hosted ubuntu-latest runners have both, so
@@ -23,7 +23,7 @@
 #
 # This is a SEPARATE workflow from ci.yml (unit/lint/grpcio-guard/headers/wheel);
 # ci.yml stays the cheap, always-on gate. This one is heavier (docker + browser)
-# and is expected to be flaky on its FIRST real runs — see the candid notes at the
+# and is expected to be flaky on its FIRST real runs - see the candid notes at the
 # bottom of team/findings-lane5-deploy.md.
 
 name: e2e
@@ -36,7 +36,7 @@ on:
   workflow_dispatch:
 
 # One in-flight e2e run per ref; a newer push cancels the older run (saves runner
-# minutes — this job is expensive). Does NOT touch ci.yml's concurrency.
+# minutes - this job is expensive). Does NOT touch ci.yml's concurrency.
 concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true
@@ -60,7 +60,7 @@ jobs:
       # Native reference client talks plain gRPC straight to Spark Connect.
       E2E_REFERENCE_REMOTE: sc://localhost:15002
       E2E_REFERENCE: ${{ github.workspace }}/tests/e2e/reference.json
-      # HARD-FAIL the checklist instead of skipping — this is the whole point.
+      # HARD-FAIL the checklist instead of skipping - this is the whole point.
       E2E_REQUIRE_STACK: "1"
 
     steps:
@@ -96,7 +96,7 @@ jobs:
 
       # -------------------------------------------------------------------
       # 1. build the wheel + JupyterLite site into _output
-      #    (reuses scripts/build_site.sh — same path a maintainer runs locally)
+      #    (reuses scripts/build_site.sh - same path a maintainer runs locally)
       # -------------------------------------------------------------------
       - name: Install build tooling (pinned)
         run: |
@@ -107,9 +107,12 @@ jobs:
           python -m pip install \
             "build==1.2.2" \
             "jupyterlite-core==0.6.4" \
-            "jupyterlite-pyodide-kernel==0.6.1"
+            "jupyterlite-pyodide-kernel==0.6.1" \
+            "jupyter-server>=2,<3"
+          # jupyter-server is required by jupyterlite's `contents` addon to add
+          # custom content (the demo notebook via `jupyter lite build --contents`).
           # Reference generator (tests/e2e/reference.py) uses the NATIVE PySpark
-          # Connect client (grpcio is fine here — it lives under tests/, outside
+          # Connect client (grpcio is fine here - it lives under tests/, outside
           # the package; DECISIONS.md #1 only forbids grpcio inside the package).
           python -m pip install -e ".[dev]"
 
@@ -121,7 +124,7 @@ jobs:
           set -euxo pipefail
           test -d "${PCW_OUTPUT_DIR}" || { echo "::error::${PCW_OUTPUT_DIR} not built"; exit 1; }
           ls -la "${PCW_OUTPUT_DIR}"
-          # COOP/COEP _headers (DECISIONS.md #4) — without these the browser is
+          # COOP/COEP _headers (DECISIONS.md #4) - without these the browser is
           # not cross-origin isolated and SharedArrayBuffer is unavailable.
           test -f "${PCW_OUTPUT_DIR}/_headers" || { echo "::error::_headers missing from ${PCW_OUTPUT_DIR}"; exit 1; }
           grep -q 'Cross-Origin-Opener-Policy: same-origin' "${PCW_OUTPUT_DIR}/_headers" \
@@ -133,7 +136,7 @@ jobs:
             || { echo "::error::wheel not copied into ${PCW_OUTPUT_DIR}"; exit 1; }
           # The JupyterLite app itself must have built (index.html at the root).
           test -f "${PCW_OUTPUT_DIR}/index.html" \
-            || echo "::warning::no index.html at ${PCW_OUTPUT_DIR} root; jupyter lite may emit it under a subpath — the static host serves the dir verbatim"
+            || echo "::warning::no index.html at ${PCW_OUTPUT_DIR} root; jupyter lite may emit it under a subpath - the static host serves the dir verbatim"
 
       # -------------------------------------------------------------------
       # 2. bring up the real stack (Spark Connect + Envoy grpc-web + static)
@@ -175,7 +178,7 @@ jobs:
             sleep 1
           done
 
-          # 2b. Envoy admin /ready — 200 only when Envoy's listeners are warmed
+          # 2b. Envoy admin /ready - 200 only when Envoy's listeners are warmed
           # and the spark-connect cluster is reachable.
           echo "waiting for Envoy admin /ready on :9901 ..."
           for i in $(seq 1 60); do
@@ -198,7 +201,7 @@ jobs:
           done
           echo "===== COOP/COEP headers on :8000 (must be present for SAB) ====="
           curl -sI "http://localhost:8000/" | grep -i 'cross-origin' || \
-            fail "COOP/COEP headers absent on :8000 — crossOriginIsolated would be false"
+            fail "COOP/COEP headers absent on :8000 - crossOriginIsolated would be false"
 
           # 2d. Envoy answers the grpc-web CORS preflight on :8081 (the endpoint
           # the in-browser client posts ExecutePlan to).
@@ -233,7 +236,7 @@ jobs:
           npm install
           npx playwright install --with-deps chromium
 
-      - name: Run e2e (E2E_REQUIRE_STACK=1 — enforce the v0 matrix)
+      - name: Run e2e (E2E_REQUIRE_STACK=1 - enforce the v0 matrix)
         working-directory: tests/e2e
         env:
           CI: "true"

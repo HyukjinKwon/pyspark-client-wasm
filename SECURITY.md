@@ -9,8 +9,8 @@ latest released version on the `main` branch only.
 
 | Version | Supported |
 |---------|-----------|
-| latest `0.x` | ✅ |
-| older `0.x`  | ❌ |
+| latest `0.x` | yes |
+| older `0.x`  | no |
 
 ## Reporting a Vulnerability
 

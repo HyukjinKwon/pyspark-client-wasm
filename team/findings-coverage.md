@@ -1,10 +1,10 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# findings-coverage.md — test coverage measurement + gap fill
+# findings-coverage.md - test coverage measurement + gap fill
 
 TEST-COVERAGE agent, 2026-06-12. Goal: answer "is coverage enough?" with data,
 then raise it. Env: Python 3.11.8, pyspark 4.0.0, pyarrow 22.0.0, grpcio present
-locally (so `_grpc_shim` early-returns on import here — see note below).
+locally (so `_grpc_shim` early-returns on import here - see note below).
 
 Command (the brief's exact invocation), unit scope only:
 
@@ -16,7 +16,7 @@ pytest --cov=pyspark_connect_web --cov-report=term-missing \
 ## Verdict
 
 Coverage was good but not enough for the production gate: 83% overall, with one
-brand-new module (`_grpc_shim.py`) at **19%** — effectively untested locally
+brand-new module (`_grpc_shim.py`) at **19%** - effectively untested locally
 because real grpcio is present, so `install_grpc_shim()` early-returns and the
 whole shim builder/install path was never exercised. After the gap-fill,
 **overall 83% -> 96%**, and every module the brief named is at 98-100%. The only
@@ -56,19 +56,19 @@ The shim only installs when grpcio is *absent*. Locally grpcio is present, so th
 install branch never runs on import. `tests/test_grpc_shim.py` uses a
 `sys.meta_path` finder that raises `ModuleNotFoundError` for `grpc`/`grpc_status`
 (plus a cleaned `sys.modules`) so `importlib.util.find_spec('grpc')` resolves to
-absent and the real install branch executes deterministically — then asserts it
+absent and the real install branch executes deterministically - then asserts it
 plants the stub, is idempotent, and that `import grpc` resolves to our shim. The
 builders (`_build_module`, `_build_grpc_status_modules`) are also exercised
 directly, needing no grpcio manipulation at all.
 
 NOTE for CI: in the `unit` job grpcio is **deliberately not installed**, so there
-the shim genuinely installs on import — these tests pass in both worlds (grpcio
+the shim genuinely installs on import - these tests pass in both worlds (grpcio
 present locally, absent in CI).
 
 ## Genuine parity gap marked xfail (NOT a red, tracked not hidden)
 
 `tests/test_arrow_coverage_gaps.py::test_session_timezone_localization_parity_gap`
-— `@pytest.mark.xfail(strict=True, reason=...)`. Lane 4 (`arrow/results.py`) is a
+- `@pytest.mark.xfail(strict=True, reason=...)`. Lane 4 (`arrow/results.py`) is a
 pure decoder and applies **no** `spark.sql.session.timeZone` localization (that
 needs a live client config it does not have). A tz-aware Arrow timestamp decodes
 to its encoded (UTC) wall clock, NOT the session-tz-localized value the native
@@ -96,7 +96,7 @@ modification.
   inside `_AtomicsBackend` (Pyodide-only; imports `js`, drives `Atomics.wait`).
   Line 169 (no-backend raise) IS covered by lane-3's existing test.
 - `arrow/results.py` 209: the empty-result-with-known-schema return. The branch
-  *runs* correctly (verified manually — returns a named empty frame), but
+  *runs* correctly (verified manually - returns a named empty frame), but
   pyarrow's schema-only IPC stream decode makes `coverage` attribute the line
   inconsistently across builds; defensive, low-risk, not worth contorting.
 - `patch.py` 219, 352: `_default_channel_factory`'s real `SabSyncChannel(...)`
@@ -105,9 +105,9 @@ modification.
   on a non-web builder; exercised end-to-end by `tests/integration`, left out of
   the offline unit lane on purpose.
 
-## Integrator handoff — EXACT snippets to add (I did NOT edit shared files)
+## Integrator handoff - EXACT snippets to add (I did NOT edit shared files)
 
-### 1. `pyproject.toml` — add `pytest-cov` to `[dev]`
+### 1. `pyproject.toml` - add `pytest-cov` to `[dev]`
 
 ```toml
 dev = [
@@ -121,7 +121,7 @@ dev = [
 ]
 ```
 
-### 2. `pyproject.toml` — coverage config (append after `[tool.pytest.ini_options]`)
+### 2. `pyproject.toml` - coverage config (append after `[tool.pytest.ini_options]`)
 
 ```toml
 [tool.coverage.run]
@@ -148,13 +148,13 @@ Suggested unit threshold: **`--cov-fail-under=90`** (current testable-code
 coverage is 96%; 90 leaves headroom for churn without letting it silently rot).
 With `kernel_bootstrap.py` omitted the floor comfortably clears 90.
 
-### 3. `.github/workflows/ci.yml` — `unit` job: replace the `- name: pytest` step
+### 3. `.github/workflows/ci.yml` - `unit` job: replace the `- name: pytest` step
 
 ```yaml
       - name: pytest (+ coverage)
         # Unit tests only. Excludes:
-        #   tests/e2e         — Playwright/TS, needs a browser + live stack
-        #   tests/integration — needs a real Spark Connect server + real grpcio
+        #   tests/e2e         - Playwright/TS, needs a browser + live stack
+        #   tests/integration - needs a real Spark Connect server + real grpcio
         # grpcio/grpcio-status are deliberately NOT installed here, so this job
         # also proves the package imports under the Pyodide constraint (_grpc_shim).
         run: >

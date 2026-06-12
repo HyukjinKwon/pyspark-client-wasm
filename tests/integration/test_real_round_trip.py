@@ -79,7 +79,7 @@ def web_spark(connect_server, installed_pcw):
 
 @pytest.fixture()
 def native_spark(connect_server):
-    """The stock native Connect client (real grpcio) — parity ground truth."""
+    """The stock native Connect client (real grpcio) - parity ground truth."""
     host, port, token = connect_server
     # Pass the token explicitly (the fixture no longer leaks it via env).
     spark = ConnectSparkSession.builder.remote(

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Shared seam types — see /API_CONTRACT.md. Mirrors /_contract_seam.py.
+"""Shared seam types - see /API_CONTRACT.md. Mirrors /_contract_seam.py.
 Integrator-owned; do not edit without a COORDINATION.md note."""
 from __future__ import annotations
 

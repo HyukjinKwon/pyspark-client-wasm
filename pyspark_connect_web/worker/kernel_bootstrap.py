@@ -5,20 +5,20 @@ pyodide kernel worker.
 Background
 ----------
 ``worker_bootstrap.js`` is a *standalone* harness that owns its Web Worker. The
-JupyterLite ``@jupyterlite/pyodide-kernel`` does **not** let us own the worker —
+JupyterLite ``@jupyterlite/pyodide-kernel`` does **not** let us own the worker -
 it spawns its own ES-module worker and runs Pyodide there with its own comms
 (``coincident`` when the page is cross-origin isolated, ``comlink`` otherwise).
 
 We therefore integrate non-invasively, in two halves:
 
-* **Page side** — ``jupyterlite/pcw_kernel_bridge.js`` wraps the global
+* **Page side** - ``jupyterlite/pcw_kernel_bridge.js`` wraps the global
   ``Worker`` constructor before JupyterLite boots, so every kernel worker gets a
   ``Bridge`` (from ``worker/bridge.js``) attached. It performs the real
   cross-origin ``fetch`` and writes response windows back into the SAB. It only
   reacts to our namespaced envelope ``{__pcw__:{...}}`` and ignores everything
   the kernel's own framing uses.
 
-* **Worker side** — *this module*, imported once inside the kernel (e.g. the
+* **Worker side** - *this module*, imported once inside the kernel (e.g. the
   first notebook cell does ``import pyspark_connect_web.worker.kernel_bootstrap``
   or simply ``pyspark_connect_web.install()``). It verifies cross-origin
   isolation and lets :class:`~.sab_channel.SabSyncChannel` allocate the SAB and
@@ -27,10 +27,10 @@ We therefore integrate non-invasively, in two halves:
 
 The selection is automatic: under Pyodide with no ``js.__pcw_register_sab`` hook
 (the kernel worker has none), ``SabSyncChannel`` picks ``transport="kernel"``.
-So application code does not need to call anything here — ``pcw.install()`` is
+So application code does not need to call anything here - ``pcw.install()`` is
 enough. This module exists to (a) give an explicit, documented entry point and
 (b) fail loudly with actionable guidance when cross-origin isolation is missing
-(the #1 footgun on GitHub Pages — use ``coi-serviceworker.js``).
+(the #1 footgun on GitHub Pages - use ``coi-serviceworker.js``).
 """
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def installed() -> bool:
 
     Returns ``True`` if a :class:`SabSyncChannel` built here would use the kernel
     SAB transport. Does not (and cannot) verify the page-side wrapper from inside
-    the worker — that is validated end-to-end in a real browser.
+    the worker - that is validated end-to-end in a real browser.
     """
     if not is_pyodide():
         return False

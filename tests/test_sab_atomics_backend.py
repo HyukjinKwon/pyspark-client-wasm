@@ -4,12 +4,12 @@
 These exercise :class:`pyspark_connect_web.worker.sab_channel._AtomicsBackend`
 *without a browser* by injecting a fake ``js`` module that simulates
 ``SharedArrayBuffer`` + ``Atomics`` and a cooperating "main thread" that plays
-exactly the role of ``bridge.js`` — reading the request out of the data SAB and
+exactly the role of ``bridge.js`` - reading the request out of the data SAB and
 writing response *windows* back, honouring the same STATE handshake.
 
 This is the closest we can get to the real handshake off-browser, and it covers
 the three things the brief calls out: a payload larger than the initial buffer,
-multi-window streaming reassembly, and a realloc path — plus error/timeout
+multi-window streaming reassembly, and a realloc path - plus error/timeout
 mapping across the SAB boundary.
 
 The real ``Atomics.wait``/``notify`` between two OS threads cannot be modelled in
@@ -17,7 +17,7 @@ one CPython thread, so the fake collapses it: when the worker calls
 ``Atomics.wait``, the fake synchronously runs the main thread's next step (which
 flips STATE), so ``wait`` then sees STATE moved and returns. This validates the
 *protocol* (window framing, ``more`` reassembly, ack sequencing, realloc, error
-meta), not the OS-level blocking — which is the documented browser-only item.
+meta), not the OS-level blocking - which is the documented browser-only item.
 """
 from __future__ import annotations
 
@@ -223,7 +223,7 @@ class FakeJs:
     def _main_step(self):
         """Advance one transition, mirroring bridge.js. Called from Atomics.wait."""
         if self._control_sab is None:
-            # No SAB announced yet — nothing the main thread can do.
+            # No SAB announced yet - nothing the main thread can do.
             return
         self._bind_current()
         state = self._ctrl._load(_C_STATE)

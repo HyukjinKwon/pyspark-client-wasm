@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for the grpc-web stub (lane 1).
 
-Uses a FAKE in-memory SyncChannel that returns canned framed bytes — no
+Uses a FAKE in-memory SyncChannel that returns canned framed bytes - no
 network, no grpcio, no browser. Real pyspark protos are used when pyspark is
 installed; otherwise proto-dependent tests skip gracefully (framing is covered
 standalone in test_transport_framing.py).
@@ -292,13 +292,13 @@ def test_server_stream_error_trailer_raises_after_messages():
 def test_server_stream_dropped_without_trailer_ends_cleanly_for_reattach():
     """GUARD DECISIONS.md #6 (CORRECTED): a stream that ends with no trailer is a
     dropped connection mid-result. It must end the iterator *cleanly*
-    (StopIteration), delivering the messages received so far and NOT raising — so
+    (StopIteration), delivering the messages received so far and NOT raising - so
     PySpark's ``ExecutePlanResponseReattachableIterator`` recovers the rest via
     ReattachExecute.
 
     Root cause this guards: lane1 originally *raised* ``SparkConnectGrpcException``
     here, on the assumption it would make the client reattach. It does the
-    opposite — PySpark's retry policy only retries ``grpc.RpcError``, so the raise
+    opposite - PySpark's retry policy only retries ``grpc.RpcError``, so the raise
     propagated to the user and ReattachExecute never fired. Proven against a real
     server in tests/integration/test_real_round_trip.py."""
     chunks = [encode_message(_execute_response("partial").SerializeToString())]
@@ -327,7 +327,7 @@ def test_server_stream_trailing_partial_frame_ends_cleanly_for_reattach():
 
 
 # --------------------------------------------------------------------------
-# Client streaming (AddArtifacts) — lowered to a single unary POST
+# Client streaming (AddArtifacts) - lowered to a single unary POST
 # --------------------------------------------------------------------------
 def test_client_stream_concatenates_requests():
     resp = pb.AddArtifactsResponse()

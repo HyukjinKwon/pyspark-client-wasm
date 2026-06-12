@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// pcw_kernel_bridge.js — PAGE-side integration of lane 3's blocking transport
+// pcw_kernel_bridge.js - PAGE-side integration of lane 3's blocking transport
 // into the JupyterLite pyodide kernel.
 //
 // Why this file exists
 // --------------------
 // `worker_bootstrap.js` is a *standalone* harness: it owns the worker. Inside
-// JupyterLite we do NOT own the worker — `@jupyterlite/pyodide-kernel` creates
+// JupyterLite we do NOT own the worker - `@jupyterlite/pyodide-kernel` creates
 // its own ES-module worker (`new Worker(...)`) and runs Pyodide there with its
 // own comms (coincident when cross-origin isolated, comlink otherwise). We
 // cannot replace that worker.
@@ -14,7 +14,7 @@
 // So we wire our bridge into it *non-invasively* from the page, by wrapping the
 // global `Worker` constructor BEFORE JupyterLite boots. Every worker the kernel
 // spawns gets our `message` listener attached. Our listener only reacts to our
-// own namespaced envelope (`{ __pcw__: {...} }`) — every other message (the
+// own namespaced envelope (`{ __pcw__: {...} }`) - every other message (the
 // kernel's `_kernelMessage`/`_logMessage`, Comlink frames, coincident's
 // reserved CHANNEL field) is ignored, and we never post anything those layers
 // would try to interpret (our envelopes have no `id` field). This mirrors how
@@ -24,7 +24,7 @@
 // kernel worker) allocates the SAB, posts `{__pcw__:{type:"sab",...}}` once, and
 // then `{__pcw__:{type:"rpc"}}` per request before parking on Atomics.wait. This
 // page-side listener does the real cross-origin `fetch` and writes the response
-// windows back into the SAB — exactly like `bridge.js`, reusing its `Bridge`.
+// windows back into the SAB - exactly like `bridge.js`, reusing its `Bridge`.
 //
 // Load order (see jupyter-lite.json / index.template.html): this script and
 // `coi-serviceworker.js` (for header-less hosts like GitHub Pages) MUST run
@@ -51,7 +51,7 @@ if (!globalThis.__pcwKernelBridgeInstalled) {
       this.addEventListener("message", (ev) => {
         const data = ev && ev.data;
         const env = data && data.__pcw__;
-        if (!env) return; // not ours — let the kernel handle it
+        if (!env) return; // not ours - let the kernel handle it
         if (env.type === "sab") {
           bridge.attach(env.control, env.data);
         } else if (env.type === "rpc") {

@@ -12,13 +12,13 @@ requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Hyukjin Kwon" }]
 # pyspark is a runtime dep but is provided by the Pyodide environment (and pinned
-# by install()); we do NOT depend on grpcio — it is not available in Pyodide.
+# by install()); we do NOT depend on grpcio - it is not available in Pyodide.
 dependencies = []
 
 [project.optional-dependencies]
 # local dev/test only; the browser gets these from Pyodide.
 # googleapis-common-protos is pure-Python and required by pyspark.sql.connect
-# (google.rpc.* protos); grpcio / grpcio-status are intentionally absent — the
+# (google.rpc.* protos); grpcio / grpcio-status are intentionally absent - the
 # _grpc_shim stubs them, mirroring Pyodide (DECISIONS.md #1).
 dev = [
     "pyspark>=4.0,<4.2",

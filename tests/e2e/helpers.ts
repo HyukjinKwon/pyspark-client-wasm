@@ -8,13 +8,13 @@
 // it back to a value). See pyspark_connect_web/jupyterlite/run_python_bridge.js.
 //
 // Graceful-degradation contract:
-//   * isStackUp() gates the whole suite — if the JupyterLite page is unreachable
+//   * isStackUp() gates the whole suite - if the JupyterLite page is unreachable
 //     the specs skip (unless E2E_REQUIRE_STACK=1).
 //   * bridgeAvailable() additionally checks that lane 3 actually exposed
 //     window.__pcwRunPython on this page. If the page is up but the bridge is
-//     NOT wired (e.g. JupyterLite-kernel integration still pending — see
+//     NOT wired (e.g. JupyterLite-kernel integration still pending - see
 //     team/findings-lane3-bridge.md open item #1), the bridge-dependent specs
-//     skip with a clear reason instead of hanging or failing red — UNLESS
+//     skip with a clear reason instead of hanging or failing red - UNLESS
 //     E2E_REQUIRE_STACK=1, in which case a missing bridge is a hard failure.
 
 import type { Page } from "@playwright/test";
@@ -33,7 +33,7 @@ export function requireStack(): boolean {
 
 /**
  * Probe whether the JupyterLite static host is reachable. Used by specs to
- * skip (not fail) when the stack is down — unless E2E_REQUIRE_STACK=1.
+ * skip (not fail) when the stack is down - unless E2E_REQUIRE_STACK=1.
  */
 export async function isStackUp(baseURL: string): Promise<boolean> {
   try {
@@ -133,7 +133,7 @@ export async function runPython(page: Page, src: string): Promise<unknown> {
  * of the test's RPCs) proceed normally.
  *
  * This works at the network layer (Playwright page.route) and needs no special
- * hook from lane 3 — it interrupts the grpc-web fetch the main-thread bridge
+ * hook from lane 3 - it interrupts the grpc-web fetch the main-thread bridge
  * issues. The grpc-web path is matched loosely so it survives Envoy host/port
  * differences (it keys off the SparkConnectService/ExecutePlan path segment).
  */

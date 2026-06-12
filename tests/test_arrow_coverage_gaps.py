@@ -165,7 +165,7 @@ def test_tz_naive_timestamp_coerces_to_datetime64ns():
     reason=(
         "KNOWN PARITY GAP (findings-lane4-arrow.md / findings-integration.md): "
         "lane 4 is a pure decoder and applies NO spark.sql.session.timeZone "
-        "localization — that needs a live client config it does not have. A "
+        "localization - that needs a live client config it does not have. A "
         "tz-aware Arrow timestamp therefore decodes to its encoded (UTC) wall "
         "clock, NOT the session-tz-localized value the native client would "
         "produce. Localization, if required for exact parity, belongs in lane 2's "

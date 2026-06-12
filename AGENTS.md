@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# AGENTS.md — engineering reference for pyspark-connect-web
+# AGENTS.md - engineering reference for pyspark-connect-web
 
 Read this with `API_CONTRACT.md` (the seam), `COORDINATION.md` (ownership +
 notes log), and `DECISIONS.md` (invariants). For the pitch, see `README.md`.
@@ -14,25 +14,25 @@ all stay as-is upstream.
 
 ```
   user PySpark code (unchanged)
-        │
-  pyspark.sql.connect.DataFrame / functions      ← untouched
-        │  builds protobuf plan
-  SparkConnectClient  ──patched──▶ our stub (lane 1, grpc-web framing)
-                                       │ SyncChannel (lane 3, Atomics/SAB → fetch)
-                                       ▼
+        |
+  pyspark.sql.connect.DataFrame / functions      <- untouched
+        |  builds protobuf plan
+  SparkConnectClient  --patched--> our stub (lane 1, grpc-web framing)
+                                       | SyncChannel (lane 3, Atomics/SAB -> fetch)
+                                       v
                             Envoy grpc-web filter (lane 5)
-                                       ▼
+                                       v
                             Spark Connect server (Spark 4.x)
-        ▲
-  Arrow IPC result batches ──decode──▶ pandas (lane 4)
+        ^
+  Arrow IPC result batches --decode--> pandas (lane 4)
 ```
 
-## Where things live in pyspark (the symbols we patch — pin the version!)
-- `pyspark.sql.connect.client.core.SparkConnectClient` — builds `self._stub`.
-- `pyspark.sql.connect.proto` (`base_pb2`, `base_pb2_grpc`) — request/response protos.
-- Connection parsing: `SparkSession.builder.remote(...)` → channel builder.
+## Where things live in pyspark (the symbols we patch - pin the version!)
+- `pyspark.sql.connect.client.core.SparkConnectClient` - builds `self._stub`.
+- `pyspark.sql.connect.proto` (`base_pb2`, `base_pb2_grpc`) - request/response protos.
+- Connection parsing: `SparkSession.builder.remote(...)` -> channel builder.
 - Reattachable iterator: `ExecutePlanResponseReattachableIterator` (Spark 3.5+).
-These are **private internals** — DECISIONS.md pins the supported pyspark range.
+These are **private internals** - DECISIONS.md pins the supported pyspark range.
 
 ## Commands (fill in as lanes land)
 ```bash

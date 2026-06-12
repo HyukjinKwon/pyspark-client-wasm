@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# findings-lane4-arrow — Arrow result decoding + request-side Arrow
+# findings-lane4-arrow - Arrow result decoding + request-side Arrow
 
 Lane 4. Owner files: `pyspark_connect_web/arrow/*`, `tests/test_arrow_results.py`.
 Environment measured: Python 3.11.8, pyspark 4.0.0, pyarrow 22.0.0, pandas 2.3.3
@@ -12,7 +12,7 @@ Environment measured: Python 3.11.8, pyspark 4.0.0, pyarrow 22.0.0, pandas 2.3.3
   self-contained subset), and **REUSE pyarrow's own `Table.to_pandas`** for the
   Arrow->pandas conversion. We do **not** call PySpark's `SparkConnectClient.to_pandas`.
 - Request side (`encode_local_relation`) is a faithful copy of the IPC framing in
-  `pyspark.sql.connect.plan.LocalRelation.plan` — proven byte-identical by test.
+  `pyspark.sql.connect.plan.LocalRelation.plan` - proven byte-identical by test.
 - SPARK-53525 chunking is handled, and degrades cleanly on pyspark 4.0.0 (whose
   proto lacks the chunk fields entirely).
 - 17 tests pass, including a multi-chunk split-batch guard and integrity guards.
@@ -38,17 +38,17 @@ PySpark 4.0.0's Arrow->pandas path lives in
    progress handling. There is no public function that takes responses -> batches.
 3. **`to_pandas` makes more RPCs.** It calls `get_config_with_defaults(...)` and
    `get_configs("spark.sql.session.timeZone")` to drive struct-handling mode and
-   timezone conversion — extra round trips that need a live client/config. Out of
+   timezone conversion - extra round trips that need a live client/config. Out of
    scope for a pure decoder.
 4. **The chunking logic we need does not exist in the pinned range.** pyspark
-   4.0.0's `ArrowBatch` proto has only `row_count`, `data`, `start_offset` — no
+   4.0.0's `ArrowBatch` proto has only `row_count`, `data`, `start_offset` - no
    `chunk_index` / `num_chunks_in_batch`. The SPARK-53525 reassembly code lives in
    Spark 4.1+ only. So even "copy the loop" would copy a loop that can't reassemble
    chunks. We must implement it ourselves.
 
 ### What we DO reuse
 
-- **pyarrow IPC** (`pa.ipc.open_stream`) and **`pa.Table.to_pandas`** — the actual
+- **pyarrow IPC** (`pa.ipc.open_stream`) and **`pa.Table.to_pandas`** - the actual
   type conversion. We pass `coerce_temporal_nanoseconds=True` exactly as PySpark's
   `to_pandas` does for pyarrow >= 13, so temporal types land identically.
 - The **IPC framing for the request side** is copied verbatim from
@@ -58,7 +58,7 @@ PySpark 4.0.0's Arrow->pandas path lives in
 This keeps us inside DECISIONS.md #2 (patch, don't fork): we copy ~5 lines of
 well-known IPC framing, not pyspark's plan/DataFrame/client logic.
 
-## SPARK-53525 — Arrow result chunking (the chunked-batch case)
+## SPARK-53525 - Arrow result chunking (the chunked-batch case)
 
 JIRA SPARK-53525 / PR apache/spark#52271, landed for Spark 4.1.0. When a single
 Arrow IPC batch's serialized bytes exceed the gRPC message limit (notably when one
@@ -69,7 +69,7 @@ row is huge), the server splits **one batch's bytes** across several
 | field (number) | meaning |
 |---|---|
 | `row_count` (1) | rows in the **fully reassembled** batch (integrity check) |
-| `data` (2) | a **byte slice** of one IPC stream — NOT independently decodable |
+| `data` (2) | a **byte slice** of one IPC stream - NOT independently decodable |
 | `start_offset` (3) | row offset where this batch begins in the overall result |
 | `chunk_index` (4, optional) | 0-based position of this chunk within the batch |
 | `num_chunks_in_batch` (5, optional) | total chunks the batch was split into |
@@ -108,7 +108,7 @@ pyspark 4.0.0's `ArrowBatch` proto has **no** `chunk_index` /
 `num_chunks_in_batch`. Calling `msg.HasField("num_chunks_in_batch")` on that proto
 raises `ValueError("unknown field")`. `arrow/results.py` wraps every presence
 probe in `_has_field()`, which catches that and returns `False`. Result: on a 4.0
-proto every batch is treated as whole — exactly correct, since 4.0 servers never
+proto every batch is treated as whole - exactly correct, since 4.0 servers never
 chunk. The same code therefore decodes both 4.0.x and future chunk-capable
 streams with no version branching. There is a test for this
 (`test_pre_chunking_proto_without_chunk_fields_decodes`).
@@ -142,7 +142,7 @@ streams with no version branching. There is a test for this
 - Pyodide ships pyarrow >= 22; `coerce_temporal_nanoseconds` (>= 13) and
   `pa.ipc.open_stream`/`new_stream` are all present. We still guard the temporal
   flag behind a version check so local dev on an older wheel doesn't break.
-- No pyarrow flight / dataset / compute features are used — only IPC stream
+- No pyarrow flight / dataset / compute features are used - only IPC stream
   read/write and `Table.to_pandas`/`Table.from_pandas`, all available in the
   Pyodide build.
 - We never touch `grpcio`. Verified by grep over `arrow/` and the test file.
@@ -153,7 +153,7 @@ streams with no version branching. There is a test for this
   `decode_arrow_batches(responses) -> pandas.DataFrame` and
   `encode_local_relation(pdf) -> bytes`.
 - Added one **public helper not in the contract**: `reassemble_record_batches`
-  (exported from `pyspark_connect_web.arrow`). It is purely additive — the bytes->
+  (exported from `pyspark_connect_web.arrow`). It is purely additive - the bytes->
   `pa.RecordBatch` step exposed for testing/reuse; does not change the seam.
 - **Heads-up for lane 2 (parity / DECISIONS.md #7):** timezone localization and
   struct-handling-mode are NOT applied by lane 4 (no client config available

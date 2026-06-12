@@ -5,7 +5,7 @@
 PySpark's ``pyspark.sql.connect`` stack does ``import grpc`` at module load
 (client core, error mapping, channel builder). Since we replace the gRPC stub
 and channel entirely (see ``patch.py``), real grpc is never *called* on our path
-— but the imports must still resolve. This shim satisfies them.
+- but the imports must still resolve. This shim satisfies them.
 
 ``install_grpc_shim()`` is a no-op when real ``grpcio`` is importable (local dev,
 CI parity runs), so we never shadow the genuine library when it is present.
@@ -156,7 +156,7 @@ def install_grpc_shim() -> bool:
 
     Returns True if the shim was installed, False if real grpcio is present
     (or the shim was already installed). Idempotent. Note: ``google.rpc``
-    (googleapis-common-protos) is pure Python and is a *real* dependency — it is
+    (googleapis-common-protos) is pure Python and is a *real* dependency - it is
     never shimmed.
     """
     existing = sys.modules.get("grpc")

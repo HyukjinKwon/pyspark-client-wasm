@@ -12,7 +12,7 @@ compressed frames and reject them on decode). The high bit (``0x80``) marks the
     grpc-status: 0\r\ngrpc-message: ...\r\n
 
 The trailer is how grpc-web carries the gRPC status out-of-band from the HTTP
-status — a request can be HTTP 200 yet carry ``grpc-status: 13``. Lane 1 decodes
+status - a request can be HTTP 200 yet carry ``grpc-status: 13``. Lane 1 decodes
 both data frames and the trailer; the stub (``grpcweb.py``) turns a non-OK
 trailer into ``SparkConnectGrpcException``.
 
@@ -63,7 +63,7 @@ def iter_frames(data: bytes) -> Iterator[Frame]:
 
     Works for both a complete response body and a single streamed chunk that
     happens to contain whole frames. A trailing partial frame (header or body
-    incomplete) raises ``ValueError`` rather than silently dropping bytes — the
+    incomplete) raises ``ValueError`` rather than silently dropping bytes - the
     stub layer is responsible for buffering partial chunks before calling this.
     """
     mv = memoryview(data)

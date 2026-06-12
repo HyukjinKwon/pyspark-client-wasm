@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A pure-Python grpc-web <-> gRPC bridge — the test-only stand-in for Envoy.
+"""A pure-Python grpc-web <-> gRPC bridge - the test-only stand-in for Envoy.
 
 In production the path is::
 
@@ -21,7 +21,7 @@ gRPC client (allowed in tests).
    proto bytes to the real Connect server over ``grpcio`` with byte-passthrough
    (de)serializers.
 3. Re-encodes each gRPC response message as a grpc-web data frame and appends a
-   ``0x80`` trailer frame carrying ``grpc-status`` / ``grpc-message`` — exactly
+   ``0x80`` trailer frame carrying ``grpc-status`` / ``grpc-message`` - exactly
    what ``GrpcWebStub`` expects back from Envoy (real framing out).
 
 This exercises lane 1's framing in BOTH directions against a real server.
@@ -64,7 +64,7 @@ class GrpcWebBridgeChannel:
     target:
         ``host:port`` of the real Spark Connect gRPC server.
     extra_metadata:
-        Channel-level gRPC metadata to inject on every call — notably the
+        Channel-level gRPC metadata to inject on every call - notably the
         ``authorization`` bearer token, which PySpark's ``ChannelBuilder.metadata()``
         deliberately omits (it rides in grpc call-credentials in the native client,
         which has no grpc-web analogue). We add it here so the server authenticates.

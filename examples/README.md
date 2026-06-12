@@ -3,12 +3,12 @@
 # Examples
 
 These are ordinary **PySpark Connect** programs. That's the whole point of
-`pyspark-connect-web`: the DataFrame/SQL code you write is unchanged — only
+`pyspark-connect-web`: the DataFrame/SQL code you write is unchanged - only
 *where it runs* and *how it reaches the server* differ.
 
 Two ways to run each example:
 
-### A. In the browser (JupyterLite) — the project's reason to exist
+### A. In the browser (JupyterLite) - the project's reason to exist
 
 Paste the body of any example into a JupyterLite notebook cell, after:
 
@@ -21,7 +21,7 @@ spark = SparkSession.builder.remote("sc://localhost:8081/;transport=grpcweb").ge
 
 `pcw.install()` routes Spark Connect over grpc-web; the rest is identical PySpark.
 
-### B. Locally with native PySpark — to run these `.py` files as-is
+### B. Locally with native PySpark - to run these `.py` files as-is
 
 Set up an environment with **conda** and point at a running Spark Connect server
 (see [`../deploy/`](../deploy/) or [`../docs/running-locally.md`](../docs/running-locally.md)):

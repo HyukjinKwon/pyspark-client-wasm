@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// worker_bootstrap.js — runs *inside* the Web Worker.
+// worker_bootstrap.js - runs *inside* the Web Worker.
 //
 // Responsibilities:
 //   1. Load Pyodide.
@@ -13,7 +13,7 @@
 //
 // This file is the worker entry: `new Worker("worker_bootstrap.js", {type:"module"})`.
 // The page must be cross-origin isolated (COOP/COEP) or SharedArrayBuffer is
-// undefined and we bail early — see DECISIONS.md #4.
+// undefined and we bail early - see DECISIONS.md #4.
 
 "use strict";
 
@@ -25,7 +25,7 @@ const PYODIDE_INDEX_URL =
   self.PCW_PYODIDE_INDEX_URL || "https://cdn.jsdelivr.net/pyodide/v0.28.0/full/";
 
 // Packages Pyodide ships / we install. grpcio + grpcio-status are intentionally
-// absent (C-ext, not in Pyodide) — pyspark_connect_web's _grpc_shim stubs them.
+// absent (C-ext, not in Pyodide) - pyspark_connect_web's _grpc_shim stubs them.
 // zstandard IS a Pyodide package and IS required by pyspark.sql.connect's
 // check_dependencies, so it must be loaded.
 const PURE_PYODIDE_PKGS = ["micropip", "pyarrow", "pandas", "numpy", "zstandard"];
@@ -75,7 +75,7 @@ async function boot() {
   self.__pcw_control_sab = controlSab;
   self.__pcw_data_sab = dataSab;
   self.__pcw_register_sab = function (c, d) {
-    // Called by _AtomicsBackend whenever it (re)binds the data SAB — including a
+    // Called by _AtomicsBackend whenever it (re)binds the data SAB - including a
     // realloc to a larger buffer for a big result. Re-announce to the main
     // thread so bridge.js attaches the *new* buffer before the next RPC. The
     // worker is between RPCs (STATE == IDLE) when this fires, so it is safe.
@@ -115,5 +115,5 @@ self.addEventListener("message", async (ev) => {
 // which performs the fetch and writes the response back into dataSab, flipping
 // STATE and Atomics.notify-ing. The worker thread, parked in Python on
 // Atomics.wait(ctrl, C_STATE, S_REQ_READY), wakes and reads the bytes. The
-// worker never yields its thread to the event loop during a blocking RPC — that
+// worker never yields its thread to the event loop during a blocking RPC - that
 // is exactly what keeps PySpark's .collect() synchronous (DECISIONS.md #5).

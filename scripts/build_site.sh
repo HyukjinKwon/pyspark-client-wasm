@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# build_site.sh — build the pyspark-connect-web wheel and the JupyterLite site
+# build_site.sh - build the pyspark-connect-web wheel and the JupyterLite site
 # into ./_output, ready to be served by deploy/ (Envoy static host with
 # COOP/COEP). Offline-capable once the pinned build deps + Pyodide assets are
 # cached; there is NO network in CI/this environment, so this script is written
@@ -43,7 +43,8 @@ command -v python3 >/dev/null 2>&1 || die "python3 not found"
 # --- 0. ensure build tooling (offline if already installed) ----------------
 if ! python3 -c "import build" >/dev/null 2>&1; then
   log "installing build tooling ($BUILD_PIN $JUPYTERLITE_CORE_PIN $JUPYTERLITE_PYODIDE_PIN)"
-  python3 -m pip install "$BUILD_PIN" "$JUPYTERLITE_CORE_PIN" "$JUPYTERLITE_PYODIDE_PIN"
+  # jupyter-server is required by jupyterlite's `contents` addon (`--contents`).
+  python3 -m pip install "$BUILD_PIN" "$JUPYTERLITE_CORE_PIN" "$JUPYTERLITE_PYODIDE_PIN" "jupyter-server>=2,<3"
 fi
 command -v jupyter >/dev/null 2>&1 || die "jupyter CLI not found (pip install $JUPYTERLITE_CORE_PIN)"
 
@@ -87,7 +88,7 @@ cp "$WHEEL" "$OUTPUT_DIR/"
 #                             be preserved in the output (hence the two dirs below
 #                             + the /jupyterlite/... site-root-absolute src).
 # run_python_bridge.js is copied for the e2e hook but is NOT auto-wired inside
-# JupyterLite (Shape B needs a live kernel connection — the remaining browser
+# JupyterLite (Shape B needs a live kernel connection - the remaining browser
 # integration item; see jupyterlite/README.md + team/findings-lane3-bridge.md).
 log "copying bridge JS assets into $OUTPUT_DIR (preserving module layout)"
 mkdir -p "$OUTPUT_DIR/jupyterlite" "$OUTPUT_DIR/worker"

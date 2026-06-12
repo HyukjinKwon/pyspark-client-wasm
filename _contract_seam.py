@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Shared types for the lane seam. Integrator-owned — do not edit without a
+"""Shared types for the lane seam. Integrator-owned - do not edit without a
 COORDINATION.md note. Lanes import these so transport (1), patch (2), and the
 sync bridge (3) agree on shapes.
 

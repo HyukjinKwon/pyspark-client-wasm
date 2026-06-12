@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Findings — DOCS (MkDocs documentation site)
+# Findings - DOCS (MkDocs documentation site)
 
 Built a real documentation site matching the maintainer's sibling projects
 (`spark-connect-scala3` uses MkDocs; both publish to
@@ -8,28 +8,28 @@ Built a real documentation site matching the maintainer's sibling projects
 
 ## What I created (owned files only)
 
-- `mkdocs.yml` — Material theme, `mkdocstrings` python handler, `site_url`
+- `mkdocs.yml` - Material theme, `mkdocstrings` python handler, `site_url`
   (`https://hyukjinkwon.github.io/pyspark-client-wasm/`), `repo_url`
   (`https://github.com/HyukjinKwon/pyspark-client-wasm`), full nav.
-- `docs/index.md` — overview + the "thin client, not local compute" framing + a
+- `docs/index.md` - overview + the "thin client, not local compute" framing + a
   signpost table to every page.
-- `docs/installation.md` — conda env setup (`conda create -n pcw python=3.11 &&
+- `docs/installation.md` - conda env setup (`conda create -n pcw python=3.11 &&
   conda activate pcw && pip install pyspark-connect-web`); pip for the package,
   conda for the env; dev extras; browser micropip install; version guard.
-- `docs/quickstart.md` — conda env -> compose stack -> client; "what just happened".
-- `docs/connection-patterns.md` — `sc://...;transport=grpcweb` scheme, http(s)
+- `docs/quickstart.md` - conda env -> compose stack -> client; "what just happened".
+- `docs/connection-patterns.md` - `sc://...;transport=grpcweb` scheme, http(s)
   shorthand normalization table, TLS rationale, bearer-token auth at Envoy,
   endpoint cheat-sheet.
-- `docs/jupyterlite-hosting.md` — hosting matrix from
+- `docs/jupyterlite-hosting.md` - hosting matrix from
   `pyspark_connect_web/jupyterlite/README.md` (Envoy / Netlify / GitHub Pages
   needs coi-serviceworker.js / http.server), COEP caveat, kernel-bridge load
   order. Note distinguishing the MkDocs docs-site Pages deploy (no isolation)
   from the JupyterLite app Pages deploy (needs the SW shim).
-- `docs/api-reference.md` — mkdocstrings auto-generated for the public surface:
+- `docs/api-reference.md` - mkdocstrings auto-generated for the public surface:
   install/uninstall/is_installed/__version__ from the package, plus
   set_stub_factory/set_channel_factory/check_pyspark_version/
   UnsupportedPySparkError/SUPPORTED_PYSPARK_RANGE from `.patch`.
-- `.github/workflows/docs.yml` — see below.
+- `.github/workflows/docs.yml` - see below.
 
 ## Nav structure
 

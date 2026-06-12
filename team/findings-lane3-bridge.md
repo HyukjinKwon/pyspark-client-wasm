@@ -1,21 +1,21 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Lane 3 findings — the SAB / Atomics blocking bridge
+# Lane 3 findings - the SAB / Atomics blocking bridge
 
 Owner: lane 3 (Pyodide runtime + Atomics/SharedArrayBuffer bridge + JupyterLite).
 Status: **hardening pass complete.** v0 design + Python channel + JS glue + local
 tests, PLUS (this pass): real JupyterLite-kernel integration, dynamic buffer
 sizing (windowed transfer + realloc), and typed error/timeout propagation across
 the SAB boundary. The browser end-to-end path is still unverified (needs a real
-cross-origin-isolated browser + lane 5's Envoy) — see "needs a browser" below.
+cross-origin-isolated browser + lane 5's Envoy) - see "needs a browser" below.
 This is the riskiest seam, so the protocol is spelled out below for lane 1
 (consumes `SyncChannel`) and lane 5 (serves the headers + proxy).
 
-## HARDENING PASS (2026-06-12) — what changed
+## HARDENING PASS (2026-06-12) - what changed
 
 1. **JupyterLite-kernel integration (was the #1 open item; now solved).** The
    pyodide kernel runs its OWN ES-module worker (coincident-based when
-   cross-origin isolated, comlink otherwise) — `worker_bootstrap.js` was a
+   cross-origin isolated, comlink otherwise) - `worker_bootstrap.js` was a
    standalone harness that we cannot substitute. New non-invasive integration in
    two halves:
    - **Page side:** `jupyterlite/pcw_kernel_bridge.js` wraps the global `Worker`
@@ -45,7 +45,7 @@ This is the riskiest seam, so the protocol is spelled out below for lane 1
    `TransportTimeout` / `TransportAborted` / `TransportError`. HTTP errors are
    NOT transport failures: the backend returns a valid `HttpResponse` with the
    non-200 `status` AND the response `headers`, so lane 1 raises the right
-   `SparkConnectGrpcException` (resolving open question #2 — headers are now
+   `SparkConnectGrpcException` (resolving open question #2 - headers are now
    populated; see below).
 
 New/changed files this pass: `worker/sab_channel.py` (windowing, realloc, kernel
@@ -55,13 +55,13 @@ capacity publish), `worker/kernel_bootstrap.py` (new), `jupyterlite/
 pcw_kernel_bridge.js` (new), `jupyterlite/coi-serviceworker.js` (new),
 `jupyterlite/run_python_bridge.js` (Shape B now drives the real kernel execute),
 `jupyterlite/README.md` (kernel wiring + hosting matrix), `tests/
-test_sab_atomics_backend.py` (new — 11 tests, fake-js handshake).
+test_sab_atomics_backend.py` (new - 11 tests, fake-js handshake).
 
 ## What lane 1 and lane 5 must know in one paragraph
 
 Lane 1 calls `SyncChannel.unary(...) -> HttpResponse` and
 `SyncChannel.server_stream(...) -> Iterator[bytes]` and gets **blocking**
-behaviour — exactly the gRPC-python calling convention, just synchronous. Lane 1
+behaviour - exactly the gRPC-python calling convention, just synchronous. Lane 1
 owns grpc-web framing of the request body and parsing of the response body
 (frames + trailer). Lane 3 moves bytes and never inspects them. Lane 5 must serve
 the JupyterLite page with `COOP: same-origin` + `COEP: require-corp` (so
@@ -78,12 +78,12 @@ origin; otherwise SharedArrayBuffer doesn't exist and nothing blocks.
 | `pyspark_connect_web/jupyterlite/*` | config | `jupyter-lite.json`, `_headers` (COOP/COEP), build `README.md`, `demo.ipynb` |
 | `tests/test_sab_channel.py` | tests | channel behaviour against a fake backend (no browser/grpcio/net) |
 
-## SAB layout (authoritative — mirrored by value in all three of the above)
+## SAB layout (authoritative - mirrored by value in all three of the above)
 
 Two SharedArrayBuffers, allocated in `worker_bootstrap.js` and shared with the
 main thread via a one-time `postMessage({type:"pcw_sab", control, data})`.
 
-### control SAB — `Int32Array`, 8 slots (32 bytes)
+### control SAB - `Int32Array`, 8 slots (32 bytes)
 
 | Index | Const | Meaning |
 |---|---|---|
@@ -93,9 +93,9 @@ main thread via a one-time `postMessage({type:"pcw_sab", control, data})`.
 | 3 | `C_SEQ`    | chunk sequence counter (streaming; reserved for debugging) |
 | 4 | `C_GEN`    | request generation; guards against stale wakeups across RPCs |
 | 5 | `C_CAP`    | current data-SAB capacity in bytes (worker publishes after alloc/realloc) |
-| 6-7 | —        | reserved |
+| 6-7 | -        | reserved |
 
-### data SAB — `Uint8Array`, default 16 MiB (now growable + windowed)
+### data SAB - `Uint8Array`, default 16 MiB (now growable + windowed)
 
 All multi-byte ints are **little-endian u32**.
 
@@ -114,7 +114,7 @@ response window (main -> worker), per RESP_CHUNK write:
   payload     = up to (capacity - META_ZONE - 4) bytes of the logical payload
 ```
 
-**Large results — SOLVED via bounded-window transfer.** A logical payload (unary
+**Large results - SOLVED via bounded-window transfer.** A logical payload (unary
 body, or one stream chunk) larger than the data region is split into successive
 *windows*. Each window sets `meta.more=true` until the last window of that
 payload; the worker reads a window, and while `more` it acks (CHUNK_ACK) and
@@ -131,7 +131,7 @@ of size.
 
 | Value | Const | Direction | Meaning |
 |---|---|---|---|
-| 0 | `S_IDLE`       | — | worker owns the buffer; safe to write a new request |
+| 0 | `S_IDLE`       | - | worker owns the buffer; safe to write a new request |
 | 1 | `S_REQ_READY`  | worker->main | request written; main should `fetch` |
 | 2 | `S_RESP_CHUNK` | main->worker | a payload (full response, or one stream chunk) is in the data SAB |
 | 3 | `S_RESP_END`   | main->worker | stream finished, no payload |
@@ -193,20 +193,20 @@ COOP/COEP is non-negotiable.
 
 ## What is testable locally vs. needs a real browser
 
-**Locally (CPython, no browser/grpcio/net) — covered by `tests/test_sab_channel.py`:**
+**Locally (CPython, no browser/grpcio/net) - covered by `tests/test_sab_channel.py`:**
 - `SabSyncChannel` satisfies the `SyncChannel` Protocol.
 - `unary` returns an `HttpResponse`; request marshalling (url join, headers,
   body, timeout) is correct; non-`HttpResponse` backend output is rejected.
 - `server_stream` yields chunks in order, is a lazy generator (one pull at a
-  time — important for prompt mid-stream-disconnect detection), surfaces a
+  time - important for prompt mid-stream-disconnect detection), surfaces a
   mid-stream error, handles the empty stream.
 - Timeout propagation (`TransportTimeout`) for both unary and streaming, using a
   fake clock backend.
 - Construction fails clearly off-Pyodide with no injected backend.
 
-**Also covered now (CPython, fake `js`) — `tests/test_sab_atomics_backend.py`:**
+**Also covered now (CPython, fake `js`) - `tests/test_sab_atomics_backend.py`:**
 - The full SAB *protocol* of `_AtomicsBackend` against a scripted main thread
-  (the fake collapses two-thread Atomics into one thread — it validates window
+  (the fake collapses two-thread Atomics into one thread - it validates window
   framing, the ack sequence, and STATE transitions, NOT OS-level blocking).
 - Payload larger than the initial buffer -> multi-window reassembly (exact).
 - Multi-message server stream with a mid-stream message that is itself windowed.
@@ -216,10 +216,10 @@ COOP/COEP is non-negotiable.
 - Kernel transport posts the namespaced `{__pcw__:{...}}` envelope, not the
   standalone `{type:"pcw_rpc"}`.
 
-**Needs a real cross-origin-isolated browser (NOT covered here — lane 5 e2e):**
+**Needs a real cross-origin-isolated browser (NOT covered here - lane 5 e2e):**
 - The *genuine* `Atomics.wait`/`notify` blocking between worker and main thread
   (the unit fake collapses it; only a browser proves the worker truly parks and
-  `.collect()` is synchronous — DECISIONS.md #5).
+  `.collect()` is synchronous - DECISIONS.md #5).
 - `bridge.js` real `fetch` + `Atomics.waitAsync` on the main thread.
 - `pcw_kernel_bridge.js` wrapping the kernel's `Worker` and the kernel worker
   picking up `transport="kernel"`; the namespaced envelope surviving alongside
@@ -231,20 +231,20 @@ COOP/COEP is non-negotiable.
 
 ## Open questions / coordination asks
 
-1. **JupyterLite kernel integration — RESOLVED this pass.** We do NOT patch or
+1. **JupyterLite kernel integration - RESOLVED this pass.** We do NOT patch or
    fork the pyodide kernel. Page-side `pcw_kernel_bridge.js` wraps the global
    `Worker` (load it before the JupyterLite bundle); worker-side
    `transport="kernel"` posts a namespaced envelope the kernel's framing
    ignores. The coi-serviceworker fallback (path (b)) is provided for header-less
-   hosts AND we keep header-based isolation for hosts that can set headers — the
+   hosts AND we keep header-based isolation for hosts that can set headers - the
    two are not exclusive (hosting matrix in `jupyterlite/README.md`). **ACTION
    lane 5:** the e2e/static host must inject the two `<script>` tags before the
    app bundle (template snippet in the README); confirm your build can do this.
-2. **`HttpResponse.headers` — now populated.** The Atomics backend now copies the
+2. **`HttpResponse.headers` - now populated.** The Atomics backend now copies the
    response HTTP headers into `HttpResponse.headers` (carried in the first
    window's meta). This makes lane 1's `_trailers_from_headers` fallback work for
    grpc-status-in-headers (empty unary, HTTP-error-with-status). Body trailers
-   still ride in the body frame as before. **No action needed from lane 1** — this
+   still ride in the body frame as before. **No action needed from lane 1** - this
    is strictly additive (you already read `resp.headers` defensively). Flag me if
    header *casing* matters: `fetch` lowercases header names, so you receive
    `grpc-status`/`grpc-message` lowercased (your `_trailers_from_headers` already
@@ -252,13 +252,13 @@ COOP/COEP is non-negotiable.
 3. **Reattach (DECISIONS.md #6).** Recovery is lane 1's iterator logic; lane 3
    just needs to surface a broken stream promptly. The lazy-generator test
    guards that chunks aren't buffered. When lane 1 issues `ReattachExecute`, it's
-   a fresh `server_stream` call — no special bridge state. Confirm that's the
+   a fresh `server_stream` call - no special bridge state. Confirm that's the
    model you expect.
 4. **One in-flight RPC per worker.** The bridge enforces a single outstanding
    RPC (matches a blocked worker thread). PySpark Connect's reattachable iterator
    is sequential per query, so this should hold; flag if any code path issues
    concurrent stub calls from one worker.
-5. **Data-region size / large results — SOLVED** via bounded-window transfer +
+5. **Data-region size / large results - SOLVED** via bounded-window transfer +
    request-side realloc (see the data-SAB section). The window size (default
    16 MiB) is now a throughput knob, not a correctness ceiling; lane 4's
    SPARK-53525 chunking and lane 5's server config no longer risk a hard failure
@@ -272,5 +272,5 @@ COOP/COEP is non-negotiable.
    raw `TransportError` propagate out of `unary`/`server_stream` (PySpark will
    surface it as the `.collect()` failure cause). If you'd rather I wrap it as a
    `SparkConnectGrpcException` with a synthetic UNAVAILABLE status so PySpark's
-   reattach logic treats a dropped connection uniformly, say so — that's a
+   reattach logic treats a dropped connection uniformly, say so - that's a
    one-line change on my side but it's your call since you own the gRPC mapping.

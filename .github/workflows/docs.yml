@@ -4,7 +4,7 @@ name: docs
 # Build the MkDocs (Material) documentation site and deploy it to GitHub Pages.
 # This is the static docs site (hyukjinkwon.github.io/pyspark-client-wasm/); it is
 # SEPARATE from the JupyterLite app build (e2e.yml / scripts/build_site.sh) and
-# from ci.yml — neither is touched here.
+# from ci.yml - neither is touched here.
 
 on:
   push:

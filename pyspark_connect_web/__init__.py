@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""pyspark-connect-web — PySpark in JupyterLite.
+"""pyspark-connect-web - PySpark in JupyterLite.
 
 Public API:
 

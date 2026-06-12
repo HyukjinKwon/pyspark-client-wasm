@@ -27,7 +27,7 @@ sc://<envoy-host>:<port>/;transport=grpcweb[;<more params>]
   **not** the Spark Connect gRPC port (`:15002`). The browser only ever talks to
   Envoy.
 * Without `;transport=grpcweb`, a stock `sc://` URL is left to PySpark's own
-  (native gRPC) handling — which cannot work in the browser, since `grpcio` is
+  (native gRPC) handling - which cannot work in the browser, since `grpcio` is
   absent. The web transport is only engaged when the parameter is present.
 
 ### `http://` / `https://` shorthand
@@ -46,30 +46,30 @@ spark = SparkSession.builder.remote("https://spark.example.com").getOrCreate()
 
 ## TLS
 
-* **Localhost / dev** runs plaintext (`http://`, `sc://…` without `use_ssl`). The
-  dev Envoy config terminates no TLS — fine for a laptop, **never** past
+* **Localhost / dev** runs plaintext (`http://`, `sc://...` without `use_ssl`). The
+  dev Envoy config terminates no TLS - fine for a laptop, **never** past
   localhost.
 * **Anything public must use TLS** (`https://` shorthand, or
   `;use_ssl=true`). Two reasons:
     1. Browsers only grant `crossOriginIsolated` (and therefore
        `SharedArrayBuffer`) on a **secure context** off `localhost`. Without HTTPS
        the blocking bridge is dead.
-    2. The bearer token (below) rides the connection — it must never travel in
+    2. The bearer token (below) rides the connection - it must never travel in
        plaintext.
 
 The prod Envoy listeners terminate TLS (`TLSv1_2` minimum); cert mounting is
 documented in [`deploy/README.md`](https://github.com/HyukjinKwon/pyspark-client-wasm/blob/main/deploy/README.md).
-See [Security §3–4](security.md) for the full rationale.
+See [Security section 3-4](security.md) for the full rationale.
 
 ## Authentication
 
 **Spark Connect has no built-in authentication.** Anyone who can reach the gRPC
 port can run arbitrary Spark plans. In this topology the browser reaches Spark
-*through Envoy*, so **Envoy is the only enforcement point** — if Envoy is open,
+*through Envoy*, so **Envoy is the only enforcement point** - if Envoy is open,
 Spark is open.
 
 Auth is carried as channel-level metadata that the stub forwards as grpc-web
-request headers — typically an `Authorization: Bearer <token>` header. PySpark's
+request headers - typically an `Authorization: Bearer <token>` header. PySpark's
 `ChannelBuilder.metadata()` is the supported way to inject channel-level headers,
 and the patch forwards exactly those pairs (see the `WebChannel.params` plumbing
 in `pyspark_connect_web/patch.py`).
@@ -93,6 +93,6 @@ On the proxy side:
 
 | Endpoint | Port | Who talks to it |
 |---|---|---|
-| Envoy grpc-web | `:8081` | the browser client (`sc://…;transport=grpcweb`) |
+| Envoy grpc-web | `:8081` | the browser client (`sc://...;transport=grpcweb`) |
 | Envoy static host | `:8000` | the browser loading the JupyterLite site (COOP/COEP) |
 | Spark Connect (gRPC) | `:15002` | the native reference generator only; **never** the browser, and not exposed in prod |

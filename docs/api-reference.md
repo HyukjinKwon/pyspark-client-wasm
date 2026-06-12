@@ -23,7 +23,7 @@ All names below are importable both from the top-level package
 ### `install() -> None`
 
 Monkey-patch `pyspark.sql.connect` so the Connect client speaks grpc-web over the
-blocking browser bridge instead of grpcio. **Idempotent** — calling it more than
+blocking browser bridge instead of grpcio. **Idempotent** - calling it more than
 once is a no-op. Raises [`UnsupportedPySparkError`](#unsupportedpysparkerror) if
 the installed PySpark is outside [`SUPPORTED_PYSPARK_RANGE`](#supported_pyspark_range).
 
@@ -57,11 +57,11 @@ Raises [`UnsupportedPySparkError`](#unsupportedpysparkerror) if out of range.
 
 ### `SUPPORTED_PYSPARK_RANGE`
 
-`str` — the supported PySpark version specifier, currently `">=4.0,<4.2"`.
+`str` - the supported PySpark version specifier, currently `">=4.0,<4.2"`.
 
 ### `__version__`
 
-`str` — the installed `pyspark-connect-web` version.
+`str` - the installed `pyspark-connect-web` version.
 
 ## Exceptions
 
@@ -75,8 +75,8 @@ when the running PySpark is outside the supported range.
 These describe the seam the factories above plug into; see
 [Architecture](architecture.md) and `API_CONTRACT.md` for the full contract.
 
-- **`SyncChannel`** — a blocking byte transport with `unary(...)` and
+- **`SyncChannel`** - a blocking byte transport with `unary(...)` and
   `server_stream(...)` methods (implemented by the lane-3 SAB bridge in the
   browser, or by a loopback in tests).
-- **`StubFactory` / `ChannelFactory`** — callables that build the service stub
+- **`StubFactory` / `ChannelFactory`** - callables that build the service stub
   and the `SyncChannel`, respectively.

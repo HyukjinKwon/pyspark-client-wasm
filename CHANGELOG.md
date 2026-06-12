@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Distribution name on PyPI: `pyspark-connect-web`. Import/package name:
 `pyspark_connect_web`. Both are pure-Python, `py3-none-any`, and (by invariant)
-carry **no** `grpcio` dependency — see DECISIONS.md #1.
+carry **no** `grpcio` dependency - see DECISIONS.md #1.
 
 ## [Unreleased]
 
@@ -24,7 +24,7 @@ carry **no** `grpcio` dependency — see DECISIONS.md #1.
 
 <!--
 Release runbook (kept here so it travels with the changelog; docs/ is owned by
-the DOCS agent — see docs/packaging-release.md for the longer-form checklist):
+the DOCS agent - see docs/packaging-release.md for the longer-form checklist):
 
   1. Pre-flight, green on `main`:
        make test            # unit; transport stubbed, no browser, no grpcio
@@ -33,7 +33,7 @@ the DOCS agent — see docs/packaging-release.md for the longer-form checklist):
      and the e2e gate (.github/workflows/e2e.yml) green on the commit, plus the
      `integration` CI job (real Spark Connect round-trip) green.
   2. Move the "Unreleased" entries below into a new "## [X.Y.Z] - YYYY-MM-DD"
-     section. Keep the heading shape EXACT — release.yml's awk extractor matches
+     section. Keep the heading shape EXACT - release.yml's awk extractor matches
      `^## \[X.Y.Z\]` and copies until the next `## [`.
   3. Bump `version` in pyproject.toml to X.Y.Z (drop any `.devN`/`rcN` suffix for
      a final release) AND `appVersion` in jupyterlite/jupyter-lite.json +
@@ -53,7 +53,7 @@ the DOCS agent — see docs/packaging-release.md for the longer-form checklist):
      README status; file a team/findings-* note for anything surprising.
 
 One-time setup (maintainer): register the repo as a trusted publisher on PyPI
-(and TestPyPI) for the `pypi`/`testpypi` GitHub Environments — no API token is
+(and TestPyPI) for the `pypi`/`testpypi` GitHub Environments - no API token is
 ever stored in repo secrets.
 -->
 
@@ -62,39 +62,39 @@ ever stored in repo secrets.
 First tagged release of the **PySpark in JupyterLite** client: run the *real*
 PySpark Connect Python client inside a browser (JupyterLite/Pyodide), talking to
 a Spark Connect server over a grpc-web transport. Existing PySpark code runs
-unchanged — no reimplementation, no local JVM, no Python backend.
+unchanged - no reimplementation, no local JVM, no Python backend.
 
 ### Added
-- **grpc-web transport** — a `fetch`-based grpc-web stub (length-prefixed
+- **grpc-web transport** - a `fetch`-based grpc-web stub (length-prefixed
   framing, `0x80` trailer frame) that replaces *only* PySpark's Connect service
   stub. We patch, we do not fork (DECISIONS.md #2). Implements
   ExecutePlan / ReattachExecute / ReleaseExecute, so mid-stream disconnects
   recover via reattach (DECISIONS.md #6).
-- **JupyterLite/Pyodide bridge** — a Web Worker + `Atomics`/`SharedArrayBuffer`
+- **JupyterLite/Pyodide bridge** - a Web Worker + `Atomics`/`SharedArrayBuffer`
   channel that makes Connect calls *blocking*, so `.collect()` / `.toPandas()`
   return synchronously and the public PySpark API stays unchanged
   (DECISIONS.md #5). Page-side `Worker` wrapping wires the bridge into the
   JupyterLite Pyodide kernel without forking it; a COI service worker covers
   header-less hosts. Cross-origin isolation (COOP/COEP) is mandatory and
   asserted (DECISIONS.md #4).
-- **Arrow result decoding** — IPC reassembly to pandas, including SPARK-53525
+- **Arrow result decoding** - IPC reassembly to pandas, including SPARK-53525
   multi-chunk split-batch handling, byte/row-exact against a native Connect
   reference (DECISIONS.md #7).
-- **`pcw.install()`** — idempotent, version-guarded to `pyspark>=4.0,<4.2`
+- **`pcw.install()`** - idempotent, version-guarded to `pyspark>=4.0,<4.2`
   (DECISIONS.md #3); raises a clear error outside the range. Accepts
   `sc://host:port/;transport=grpcweb` plus `http(s)://` shorthand.
-- **Real Spark-Connect-verified Python vertical** — the full v0 read-path matrix
+- **Real Spark-Connect-verified Python vertical** - the full v0 read-path matrix
   (`range`, `select`/`filter`/`groupBy`/`agg`, `toPandas`, `createDataFrame`,
   `spark.sql(...)`, 200k-row multi-response stream, mid-stream reattach) proven
   against a real in-process Spark Connect server in `tests/integration/` with a
-  pure-Python grpc-web↔gRPC bridge standing in for Envoy.
-- **Deploy stack** — dev `docker compose` (Spark 4.0.0 Connect + Envoy grpc-web
+  pure-Python grpc-web<->gRPC bridge standing in for Envoy.
+- **Deploy stack** - dev `docker compose` (Spark 4.0.0 Connect + Envoy grpc-web
   proxy + COOP/COEP static host) and a hardened prod overlay (TLS, exact-origin
   CORS, bearer-token gate, size limits, health/readiness).
-- **Pure-Python wheel** — `py3-none-any`, `dependencies = []`, **no `grpcio`**
+- **Pure-Python wheel** - `py3-none-any`, `dependencies = []`, **no `grpcio`**
   (DECISIONS.md #1); CI guards the no-grpcio invariant at source, wheel-metadata,
   and import time.
-- **Packaging & release automation** — `python -m build` sdist + wheel, PyPI
+- **Packaging & release automation** - `python -m build` sdist + wheel, PyPI
   publish via OIDC trusted publishing on a `vX.Y.Z` tag, JupyterLite site built
   as a release asset, GitHub Release notes sourced from this changelog
   (`.github/workflows/release.yml`).

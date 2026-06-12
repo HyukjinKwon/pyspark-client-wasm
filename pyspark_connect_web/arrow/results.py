@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
 """Arrow result decoding (response side) and Arrow IPC encoding (request side).
 
-Result side — ``decode_arrow_batches``:
+Result side - ``decode_arrow_batches``:
     Spark Connect returns query results as a stream of ``ExecutePlanResponse``
     protos. The data-bearing ones set the ``arrow_batch`` field, whose ``data``
     holds serialized Arrow IPC-stream bytes. We consume the response iterable,
     reassemble any batch that SPARK-53525 split across several responses, decode
     each reassembled IPC stream to ``pyarrow.RecordBatch`` objects in row order,
     and build one pandas ``DataFrame``. Correctness (row/type-exactness) is the
-    priority — see DECISIONS.md #7.
+    priority - see DECISIONS.md #7.
 
-Request side — ``encode_local_relation``:
+Request side - ``encode_local_relation``:
     ``createDataFrame(pdf)`` ships the local data to the server as a
     ``LocalRelation`` whose ``data`` is an Arrow IPC stream. This mirrors exactly
     what ``pyspark.sql.connect.plan.LocalRelation.plan`` writes, so the produced
@@ -21,13 +21,13 @@ SPARK-53525 (Arrow result chunking, Spark 4.1+):
     message, the server may split them across several ``ExecutePlanResponse``
     messages. The ``ArrowBatch`` message then carries two extra optional fields:
 
-      * ``chunk_index``         — 0-based position of this chunk within the batch
-      * ``num_chunks_in_batch`` — total chunks the batch was split into
+      * ``chunk_index``         - 0-based position of this chunk within the batch
+      * ``num_chunks_in_batch`` - total chunks the batch was split into
 
     A chunk's ``data`` is NOT independently valid Arrow; only the byte
     concatenation of all chunks (in ``chunk_index`` order) forms a decodable IPC
     stream. ``row_count`` is the row count of the fully reassembled batch and
-    ``start_offset`` is the batch's starting row offset in the overall result —
+    ``start_offset`` is the batch's starting row offset in the overall result -
     both are integrity checks. These fields are ``proto3 optional`` and DO NOT
     exist in pyspark 4.0.0's proto (they arrived in 4.1). We therefore probe them
     with ``HasField`` and degrade gracefully: when ``num_chunks_in_batch`` is
@@ -160,8 +160,8 @@ def reassemble_record_batches(responses: Iterable[Any]) -> List["pa.RecordBatch"
     Walks the ``ExecutePlanResponse`` iterable once, joins SPARK-53525 chunk
     fragments back into whole IPC streams, decodes each to ``pa.RecordBatch``
     objects, and returns them in arrival (row) order. Non-data responses (schema,
-    metrics, SQL-command results, progress, ...) are ignored here — this function
-    is purely the bytes→batches step.
+    metrics, SQL-command results, progress, ...) are ignored here - this function
+    is purely the bytes->batches step.
 
     Raises ``ValueError`` on a malformed stream: out-of-order chunk indices, a
     gap between a batch's ``start_offset`` and the running row count, an
@@ -176,7 +176,7 @@ def decode_arrow_batches(responses: Iterable[Any]) -> "pd.DataFrame":
     """Decode a stream of ``ExecutePlanResponse`` protos to a pandas DataFrame.
 
     Consumes ``responses`` (an iterable of objects with the
-    ``ExecutePlanResponse`` shape — either real pyspark protos or anything
+    ``ExecutePlanResponse`` shape - either real pyspark protos or anything
     exposing ``HasField('arrow_batch')`` and an ``arrow_batch`` with
     ``data`` / ``row_count`` / optional chunk fields), reassembles SPARK-53525
     chunked batches, decodes them via pyarrow IPC, and converts the resulting

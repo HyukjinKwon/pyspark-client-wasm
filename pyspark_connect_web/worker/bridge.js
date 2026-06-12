@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// bridge.js — main-thread half of lane 3's blocking transport.
+// bridge.js - main-thread half of lane 3's blocking transport.
 //
 // The Web Worker (running Pyodide + PySpark) cannot do `fetch` against a
 // cross-origin gRPC-web endpoint and, more importantly, cannot block on an
 // async result. So the worker writes its request into a SharedArrayBuffer and
 // parks on `Atomics.wait`. This file runs on the *main* thread, receives the
 // nudge postMessage, reads the request out of the SAB, performs the real async
-// `fetch`, and writes the response bytes back into the SAB — flipping the STATE
+// `fetch`, and writes the response bytes back into the SAB - flipping the STATE
 // control word and `Atomics.notify`-ing to wake the worker.
 //
 // The SAB layout + state machine is the authoritative contract; it is mirrored
 // in `sab_channel.py` and documented in team/findings-lane3-bridge.md. Keep the
 // three in sync by VALUE.
 //
-// Large results — bounded-window transfer
+// Large results - bounded-window transfer
 // ----------------------------------------
 // The data SAB has a fixed capacity. A single logical payload (a unary body or
 // one server-stream chunk) larger than the payload region is written in
@@ -101,7 +101,7 @@ class Bridge {
     off += headerLen;
     const bodyLen = this._getU32(off);
     off += 4;
-    // Copy the body out — the worker may overwrite the SAB once we wake it.
+    // Copy the body out - the worker may overwrite the SAB once we wake it.
     const body = this.data.slice(off, off + bodyLen);
     return { header, body };
   }

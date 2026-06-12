@@ -4,10 +4,10 @@
 
 There are two distinct environments to keep straight:
 
-1. **A local Python environment** — for development, building the wheel, running
+1. **A local Python environment** - for development, building the wheel, running
    the unit tests, and generating e2e reference results. We recommend **conda**
    for this.
-2. **The browser (Pyodide/JupyterLite) environment** — where the package
+2. **The browser (Pyodide/JupyterLite) environment** - where the package
    actually runs. Here the package is installed with `micropip`, and `pyspark` /
    `pyarrow` / `pandas` / `protobuf` come from Pyodide, not from your machine.
 
@@ -42,14 +42,14 @@ pip install "pyspark-connect-web[dev]"
 
 The `dev` extras pull in `pyspark>=4.0,<4.2`, `pyarrow>=22`, `pandas`,
 `protobuf>=7`, `googleapis-common-protos`, and `pytest`. Note that `grpcio` is
-intentionally **not** a dependency — the package never imports it, mirroring the
+intentionally **not** a dependency - the package never imports it, mirroring the
 Pyodide environment (see [Architecture](architecture.md) and `DECISIONS.md` #1).
 
 !!! note "Why conda for the env but pip for the package?"
     The package is published to PyPI as a wheel, so `pip install` is the right
     way to install it. Conda is used only to give you a clean, reproducible
     Python interpreter and environment to install it *into*. If you prefer
-    `python -m venv`, that works too — only the env-management tool differs.
+    `python -m venv`, that works too - only the env-management tool differs.
 
 ## Supported PySpark version
 
@@ -80,7 +80,7 @@ spark = SparkSession.builder.remote("sc://<host>:8081/;transport=grpcweb").getOr
 ```
 
 Under COEP `require-corp`, a cross-origin CDN wheel must send
-`Cross-Origin-Resource-Policy` or the import is blocked — so the build copies the
+`Cross-Origin-Resource-Policy` or the import is blocked - so the build copies the
 wheel into the JupyterLite site root and serves it same-origin. See
 [JupyterLite hosting](jupyterlite-hosting.md) and
 [Packaging & release](packaging-release.md) for the full build flow.

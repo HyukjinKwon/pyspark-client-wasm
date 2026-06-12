@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// coi-serviceworker.js — make a static, header-less host (e.g. GitHub Pages)
+// coi-serviceworker.js - make a static, header-less host (e.g. GitHub Pages)
 // cross-origin isolated so SharedArrayBuffer/Atomics work (DECISIONS.md #4).
 //
 // Hosts like GitHub Pages cannot set response headers, so `crossOriginIsolated`

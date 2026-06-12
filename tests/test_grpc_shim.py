@@ -74,7 +74,7 @@ def no_grpcio(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# _build_module — the grpc stand-in
+# _build_module - the grpc stand-in
 # --------------------------------------------------------------------------- #
 def test_build_module_exposes_version_and_marker():
     m = _grpc_shim._build_module()
@@ -136,7 +136,7 @@ def test_build_module_compression_and_connectivity_enums():
 
 
 # --------------------------------------------------------------------------- #
-# _build_grpc_status_modules — grpc_status / rpc_status stand-in
+# _build_grpc_status_modules - grpc_status / rpc_status stand-in
 # --------------------------------------------------------------------------- #
 def test_build_grpc_status_modules_from_call_returns_none():
     pkg, rpc_status = _grpc_shim._build_grpc_status_modules()
@@ -154,13 +154,13 @@ def test_build_grpc_status_to_status_raises():
 
 
 # --------------------------------------------------------------------------- #
-# install_grpc_shim — install / idempotency / no-op semantics
+# install_grpc_shim - install / idempotency / no-op semantics
 # --------------------------------------------------------------------------- #
 def test_install_is_noop_when_real_grpcio_present():
-    """grpcio is installed in local dev — install must NOT shadow it and must
+    """grpcio is installed in local dev - install must NOT shadow it and must
     return False (real grpcio present, nothing installed)."""
     # If our own shim is the loaded ``grpc``, grpcio is by definition absent
-    # (the shim only installs when grpcio is missing — e.g. CI's unit job /
+    # (the shim only installs when grpcio is missing - e.g. CI's unit job /
     # Pyodide), so this "no-op when present" path isn't testable here. Detecting
     # the shim marker is necessary because the stub now carries a valid
     # __spec__, so find_spec("grpc") alone no longer reveals grpcio's absence.

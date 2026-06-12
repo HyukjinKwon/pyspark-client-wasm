@@ -15,7 +15,7 @@
 #      below and in deploy/README.md.
 #   2. TIGHTENED CORS: explicit allowlist of origins (NO ".*" wildcard). Driven
 #      by the placeholder "https://YOUR-LITE-ORIGIN.example.com"; replace it (or
-#      template it via envsubst — see scripts/render_envoy_prod.sh).
+#      template it via envsubst - see scripts/render_envoy_prod.sh).
 #   3. Bearer-token / auth-header pass-through to the Connect server. Spark
 #      Connect has NO built-in authentication; the proxy is the enforcement
 #      point. We (a) allow the `authorization` request header through CORS and
@@ -32,7 +32,7 @@
 #   6. Admin bound to 127.0.0.1 only (never expose :9901 publicly).
 #
 # Keep in lockstep with deploy/envoy.yaml when the grpc_web/COOP/COEP plumbing
-# changes — the dev file is the source of truth for the transport wiring.
+# changes - the dev file is the source of truth for the transport wiring.
 
 admin:
   address:
@@ -42,7 +42,7 @@ admin:
 static_resources:
   listeners:
     # ---------------------------------------------------------------------
-    # grpc-web endpoint  (browser client -> Spark Connect)  — TLS + auth + CORS
+    # grpc-web endpoint  (browser client -> Spark Connect)  - TLS + auth + CORS
     # ---------------------------------------------------------------------
     - name: grpcweb_listener
       address:
@@ -89,7 +89,7 @@ static_resources:
                     - name: grpcweb_host
                       # Match only the configured public hostname in prod.
                       domains: ["YOUR-PUBLIC-HOST.example.com", "YOUR-PUBLIC-HOST.example.com:8443"]
-                      # TIGHTENED CORS — explicit origin allowlist, NO wildcard.
+                      # TIGHTENED CORS - explicit origin allowlist, NO wildcard.
                       # Replace the placeholder origin(s) with your JupyterLite
                       # site origin(s). Use exact string match, not regex ".*".
                       cors:
@@ -152,7 +152,7 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 
     # ---------------------------------------------------------------------
-    # static site host  (JupyterLite) — TLS + COOP/COEP — DECISIONS.md #4
+    # static site host  (JupyterLite) - TLS + COOP/COEP - DECISIONS.md #4
     # ---------------------------------------------------------------------
     - name: static_listener
       address:
@@ -185,7 +185,7 @@ static_resources:
                         - match: { prefix: "/" }
                           route: { cluster: static-site }
                           # MANDATORY cross-origin isolation headers (DECISIONS.md
-                          # #4) — same as dev. Required for SharedArrayBuffer.
+                          # #4) - same as dev. Required for SharedArrayBuffer.
                           response_headers_to_add:
                             - header:
                                 key: "Cross-Origin-Opener-Policy"
@@ -301,7 +301,7 @@ static_resources:
 # ---------------------------------------------------------------------------
 # REAL AUTH (replace the Lua gate above with one of these in production)
 # ---------------------------------------------------------------------------
-# Option A — validate a JWT (e.g. from your IdP) before forwarding to Spark:
+# Option A - validate a JWT (e.g. from your IdP) before forwarding to Spark:
 #
 #   - name: envoy.filters.http.jwt_authn
 #     typed_config:
@@ -320,7 +320,7 @@ static_resources:
 #         - match: { prefix: "/" }
 #           requires: { provider_name: idp }
 #
-# Option B — delegate to an external authz service (opaque tokens, ACLs):
+# Option B - delegate to an external authz service (opaque tokens, ACLs):
 #
 #   - name: envoy.filters.http.ext_authz
 #     typed_config:
@@ -332,5 +332,5 @@ static_resources:
 #
 # Both run BEFORE the router and AFTER cors, so preflights still succeed.
 # Whichever you choose, the `authorization` header is forwarded to Spark; Spark
-# Connect does not check it itself (it has no built-in auth — that is the whole
+# Connect does not check it itself (it has no built-in auth - that is the whole
 # reason the proxy enforces it).

@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# DECISIONS.md — invariants that must not regress
+# DECISIONS.md - invariants that must not regress
 
 These are load-bearing. If you must change one, append to COORDINATION.md with the
 reason, and update the guard test.
@@ -22,7 +22,7 @@ reason, and update the guard test.
    the DataFrame API. Guard: a test that calls a plain `.collect()` and gets rows.
 6. **Reattachable execute is in-scope.** The client issues ExecutePlan +
    ReattachExecute + ReleaseExecute. The stub must implement all three, not just
-   the stream — broken streams must recover. Guard: kill a stream mid-flight, assert
+   the stream - broken streams must recover. Guard: kill a stream mid-flight, assert
    recovery via reattach.
 7. **Arrow correctness over speed.** Results must be byte/row-exact vs a
    reference run of the same query on plain PySpark Connect. Guard: a parity test

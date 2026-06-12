@@ -44,7 +44,7 @@ spark.range(10).filter("id % 2 = 0").toPandas()
 ```
 
 In JupyterLite, open <http://localhost:8000/> and run the demo notebook. **Verify
-isolation first** — `crossOriginIsolated === true` in the browser console — or the
+isolation first** - `crossOriginIsolated === true` in the browser console - or the
 blocking bridge cannot work:
 
 ```js
@@ -55,15 +55,15 @@ crossOriginIsolated === true   // must be true; else SharedArrayBuffer is unavai
 
 * `pcw.install()` monkey-patched PySpark's Connect stub to use a grpc-web/`fetch`
   transport. Nothing above the stub changed.
-* `SparkSession.builder.remote("sc://…;transport=grpcweb")` parsed the web scheme
+* `SparkSession.builder.remote("sc://...;transport=grpcweb")` parsed the web scheme
   and returned an ordinary `SparkSession`.
 * `.toPandas()` built a protobuf plan, shipped it through Envoy to the Spark
-  Connect server, and decoded the Arrow IPC result back into a pandas DataFrame —
+  Connect server, and decoded the Arrow IPC result back into a pandas DataFrame -
   all synchronously, via the `Atomics`/`SharedArrayBuffer` bridge.
 
 ## Next steps
 
-* [Connection patterns](connection-patterns.md) — `sc://` scheme, TLS, and auth.
-* [Running locally](running-locally.md) — reference generation and the e2e harness.
-* [JupyterLite hosting](jupyterlite-hosting.md) — host the site on GitHub Pages and friends.
-* [Security](security.md) — what to harden before going past localhost.
+* [Connection patterns](connection-patterns.md) - `sc://` scheme, TLS, and auth.
+* [Running locally](running-locally.md) - reference generation and the e2e harness.
+* [JupyterLite hosting](jupyterlite-hosting.md) - host the site on GitHub Pages and friends.
+* [Security](security.md) - what to harden before going past localhost.

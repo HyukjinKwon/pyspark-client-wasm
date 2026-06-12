@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// run_python_bridge.js — the `window.__pcwRunPython(src)` hook lane 5's e2e
+// run_python_bridge.js - the `window.__pcwRunPython(src)` hook lane 5's e2e
 // harness drives (see tests/e2e/helpers.ts). It runs a snippet of Python in the
 // Pyodide worker and resolves with the JSON-serialised result.
 //
@@ -53,7 +53,7 @@ export function installRunPython(worker) {
 // pcw_kernel_bridge.js). We just submit code and collect the reply text.
 //
 // `kernelConnection` must expose `.requestExecute({code})` returning an
-// IFuture with `.onIOPub` and `.done` — the standard @jupyterlab/services shape.
+// IFuture with `.onIOPub` and `.done` - the standard @jupyterlab/services shape.
 export function installRunPythonForJupyterLite(kernelConnection) {
   if (!kernelConnection || typeof kernelConnection.requestExecute !== "function") {
     throw new Error(

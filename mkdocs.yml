@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 site_name: pyspark-connect-web
-site_description: "PySpark in JupyterLite — run the real PySpark Connect client in the browser over grpc-web."
+site_description: "PySpark in JupyterLite - run the real PySpark Connect client in the browser over grpc-web."
 site_author: Hyukjin Kwon
 site_url: https://hyukjinkwon.github.io/pyspark-client-wasm/
 
@@ -44,7 +44,7 @@ theme:
 plugins:
   - search
   # The API reference (docs/api-reference.md) is hand-written for the tiny,
-  # stable public surface — no mkdocstrings autodoc, which kept the build
+  # stable public surface - no mkdocstrings autodoc, which kept the build
   # fragile (griffe/autorefs version coupling) for little gain here.
 
 markdown_extensions:
@@ -60,7 +60,6 @@ markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
   - pymdownx.tabbed:
       alternate_style: true
 

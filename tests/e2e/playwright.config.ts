@@ -5,7 +5,7 @@
 // The JupyterLite page requires cross-origin isolation (COOP/COEP, DECISIONS.md
 // #4) so that SharedArrayBuffer is available to the Atomics/SAB blocking bridge.
 // Chromium honours those headers from the server (Envoy static host) and exposes
-// `crossOriginIsolated` — the first checklist assertion. No special launch flag
+// `crossOriginIsolated` - the first checklist assertion. No special launch flag
 // is needed as long as the page is served with the headers; we keep the launch
 // minimal and let the server-sent headers drive isolation.
 

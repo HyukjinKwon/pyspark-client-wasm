@@ -4,10 +4,10 @@
 Runs the SAME queries the browser e2e runs, but against a **native** PySpark
 Connect client (plain gRPC, not grpc-web), and writes the results to a JSON file
 the browser run compares against. This is the ground truth for DECISIONS.md #7
-("Arrow correctness over speed — byte/row-exact vs a reference run of the same
+("Arrow correctness over speed - byte/row-exact vs a reference run of the same
 query on plain PySpark Connect").
 
-IMPORTANT — grpcio scoping (DECISIONS.md #1):
+IMPORTANT - grpcio scoping (DECISIONS.md #1):
     This file uses PySpark's normal Connect client, which imports ``grpcio``.
     That is allowed *here* because this file lives under ``tests/`` and is NOT
     part of the ``pyspark_connect_web/`` package. The CI grpcio-guard checks
@@ -94,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         ref = build_reference(args.remote)
-    except Exception as exc:  # noqa: BLE001 — CLI: surface any failure clearly
+    except Exception as exc:  # noqa: BLE001 - CLI: surface any failure clearly
         print(
             f"[reference.py] could not generate reference from {args.remote}: {exc}\n"
             f"  Is a Spark Connect server up? (docker compose -f deploy/compose.yaml up)",

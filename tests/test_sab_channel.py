@@ -5,7 +5,7 @@ No browser, no Pyodide, no grpcio, no network. The fake :class:`FakeBackend`
 implements the same synchronous ``SyncBackend`` protocol the real Atomics
 backend does, so these tests cover the channel's request marshalling, the
 HttpResponse contract for ``unary``, in-order chunk delivery for
-``server_stream``, and timeout propagation — everything that is testable off the
+``server_stream``, and timeout propagation - everything that is testable off the
 browser.
 """
 from __future__ import annotations
@@ -25,8 +25,8 @@ from pyspark_connect_web.worker import (
 
 # --------------------------------------------------------------------------- #
 # A fake synchronous backend. It records what the channel handed down and
-# returns scripted responses. It is fully synchronous (blocking) — matching the
-# real backend's contract — but does no I/O.
+# returns scripted responses. It is fully synchronous (blocking) - matching the
+# real backend's contract - but does no I/O.
 # --------------------------------------------------------------------------- #
 class FakeBackend:
     def __init__(self, *, unary_response=None, stream_chunks=None,
@@ -179,7 +179,7 @@ def test_server_stream_is_lazy_generator():
 
 
 def test_server_stream_mid_stream_error_surfaces():
-    # Two good chunks then a transport failure — the consumer sees the first two
+    # Two good chunks then a transport failure - the consumer sees the first two
     # then the exception, modelling a broken stream that lane 1 recovers via
     # ReattachExecute.
     backend = FakeBackend(stream_chunks=[b"a", b"b", b"c"], stream_error_after=2)

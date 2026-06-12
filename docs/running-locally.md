@@ -6,7 +6,7 @@ End-to-end local setup: a Spark Connect server, the Envoy grpc-web proxy, the
 JupyterLite site, the reference generator, and the e2e harness.
 
 > Status: the server side (`deploy/`) and the e2e scaffold (`tests/e2e/`) are
-> ready. The browser client (lanes 1–4) and the JupyterLite build (lane 3) are
+> ready. The browser client (lanes 1-4) and the JupyterLite build (lane 3) are
 > in progress; until they land, the e2e harness skips the in-browser checklist
 > items and only the `crossOriginIsolated` gate is fully live.
 
@@ -57,7 +57,7 @@ crossOriginIsolated === true   // must be true; else SharedArrayBuffer is unavai
 
 The e2e suite compares the browser's `toPandas()` against a native run. Generate
 it from the same `:15002` Connect server (needs `grpcio`, which is fine outside
-the package — see DECISIONS.md #1):
+the package - see DECISIONS.md #1):
 
 ```bash
 python -m venv .venv && . .venv/bin/activate

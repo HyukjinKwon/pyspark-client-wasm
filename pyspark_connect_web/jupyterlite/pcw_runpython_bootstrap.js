@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// pcw_runpython_bootstrap.js — closes the last browser-integration gap:
+// pcw_runpython_bootstrap.js - closes the last browser-integration gap:
 // installs `window.__pcwRunPython` (the hook tests/e2e drives) by attaching it
 // to a LIVE JupyterLite kernel, using run_python_bridge.js Shape B.
 //

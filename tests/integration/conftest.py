@@ -34,7 +34,7 @@ def connect_server():
     Session-scoped: the JVM is expensive to start, so we reuse it across tests.
     """
     # The bridge needs grpcio (test-only downstream client). If it's missing,
-    # skip rather than error — the unit suite already covers the framing logic.
+    # skip rather than error - the unit suite already covers the framing logic.
     try:
         import grpc  # noqa: F401
     except Exception:  # pragma: no cover
@@ -53,7 +53,7 @@ def connect_server():
     # The Connect server reads the expected auth token from this env var at
     # startup. We restore the prior value after the JVM is up so this fixture
     # does NOT leak a token into ``os.environ`` for the rest of the pytest
-    # session — a leaked token flips ``DefaultChannelBuilder.secure`` to True and
+    # session - a leaked token flips ``DefaultChannelBuilder.secure`` to True and
     # breaks unrelated unit tests (test isolation). Both clients are handed the
     # token explicitly instead (web via bridge metadata, native via ``token=``).
     _prev_token = os.environ.get("SPARK_CONNECT_AUTHENTICATE_TOKEN")

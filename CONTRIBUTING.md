@@ -2,7 +2,7 @@
 
 # Contributing to pyspark-connect-web
 
-Contributions of all kinds — bug reports, documentation, examples, and code —
+Contributions of all kinds - bug reports, documentation, examples, and code -
 are welcome. This project runs the *real* PySpark Connect client in
 JupyterLite/Pyodide by monkey-patching its gRPC stub with a grpc-web transport.
 We **patch, we do not fork** PySpark; please keep changes within that model.
@@ -33,7 +33,7 @@ The `dev` extra installs `pyspark>=4.0,<4.2`, `pyarrow`, `pandas`, `protobuf`,
 pytest -q
 ```
 
-Unit tests **stub the transport** — they never import `grpcio` and never touch a
+Unit tests **stub the transport** - they never import `grpcio` and never touch a
 browser. CI fails if `grpcio` is imported anywhere under `pyspark_connect_web/`,
 so keep test doubles in the test tree, not in the package.
 
@@ -67,7 +67,7 @@ for the stub seam between lanes. Two rules matter most:
 
 * **Don't rewrite a file another lane owns.** Build on the contract.
 * If you need a contract change, edit `API_CONTRACT.md` **and** append a dated
-  note to `COORDINATION.md` first — every other lane builds against those shapes.
+  note to `COORDINATION.md` first - every other lane builds against those shapes.
 
 Keep the [`DECISIONS.md`](DECISIONS.md) invariants green, and add a guard test
 when you fix a subtle bug. Apache-2.0 / SPDX header on every source file.

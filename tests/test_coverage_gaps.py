@@ -1,20 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
 """Targeted unit tests filling the coverage gaps the existing suites leave behind.
 
-Scope (all offline — no network, no browser, no grpcio):
+Scope (all offline - no network, no browser, no grpcio):
 
-  * ``patch.py``   — WebChannel.close (with/without a closeable channel + error
+  * ``patch.py``   - WebChannel.close (with/without a closeable channel + error
                      swallow), the lazy default channel/stub factories' deferred
                      errors, the non-web ``__init__``/``toChannel`` passthrough,
                      and uninstall-when-not-installed.
-  * ``grpcweb.py`` — unary "OK trailer but no message frame", client-stream
+  * ``grpcweb.py`` - unary "OK trailer but no message frame", client-stream
                      header-fallback + empty-message, compressed-frame rejection
                      on both the unary and streaming decode paths, the
                      present-trailer-with-no-grpc-status error.
-  * ``arrow/results.py`` — first-chunk ``chunk_index != 0`` rejection, the
+  * ``arrow/results.py`` - first-chunk ``chunk_index != 0`` rejection, the
                      empty-result-with-known-schema branch, and the pyarrow
                      version-probe fallback.
-  * ``worker/sab_channel.py`` — the local/no-backend error, ``is_pyodide`` both
+  * ``worker/sab_channel.py`` - the local/no-backend error, ``is_pyodide`` both
                      ways, the request-shape guard, the ``make_channel`` helper,
                      and the backend-return-type guard. (The Atomics backend is
                      browser-only and exercised by tests/test_sab_atomics_backend.py.)
@@ -95,7 +95,7 @@ def _block_submodule(monkeypatch, modname: str):
     The lazy factories do ``from .worker import SabSyncChannel`` /
     ``from .transport import GrpcWebStub``. Those submodules are already cached in
     ``sys.modules`` (the package imported them at load), so blocking the importer
-    alone is not enough — we set the cached entry to ``None``, which makes Python
+    alone is not enough - we set the cached entry to ``None``, which makes Python
     raise ``ImportError`` on any fresh import of that name.
     """
     import sys
@@ -156,7 +156,7 @@ def test_non_web_url_passes_through_unpatched():
 
 
 # =========================================================================== #
-# grpcweb.py — needs pyspark protos
+# grpcweb.py - needs pyspark protos
 # =========================================================================== #
 pb = pytest.importorskip(
     "pyspark.sql.connect.proto",

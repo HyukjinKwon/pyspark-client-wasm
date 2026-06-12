@@ -5,7 +5,7 @@ No grpcio, no browser, no server. We build Arrow record batches with pyarrow,
 serialize them to IPC-stream bytes, wrap those bytes in fake
 ``ExecutePlanResponse``-shaped objects (and, when pyspark is importable, in real
 protos too), and assert ``decode_arrow_batches`` reconstructs the exact pandas
-DataFrame — including the SPARK-53525 multi-chunk / split-batch case.
+DataFrame - including the SPARK-53525 multi-chunk / split-batch case.
 """
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ class FakeResponse:
     def HasField(self, name: str) -> bool:  # noqa: N802
         if name == "arrow_batch":
             return self.arrow_batch is not None
-        # Other oneof members (schema, metrics, sql_command_result, ...) — all
+        # Other oneof members (schema, metrics, sql_command_result, ...) - all
         # absent in these fixtures.
         return False
 
@@ -120,7 +120,7 @@ def test_decode_single_batch_roundtrip():
 
 
 def test_decode_multiple_whole_batches_preserves_row_order():
-    # Two independent, self-contained IPC batches → rows must concatenate in order.
+    # Two independent, self-contained IPC batches -> rows must concatenate in order.
     full = _sample_table()
     b1 = full.slice(0, 2).combine_chunks().to_batches()[0]
     b2 = full.slice(2, 3).combine_chunks().to_batches()[0]
@@ -338,7 +338,7 @@ def test_encode_local_relation_roundtrips_through_decode():
     ipc = encode_local_relation(pdf)
     assert isinstance(ipc, bytes) and len(ipc) > 0
 
-    # The encoded bytes are exactly one self-contained IPC stream — feed them back
+    # The encoded bytes are exactly one self-contained IPC stream - feed them back
     # through the result decoder as a single whole batch.
     table = pa.Table.from_pandas(pdf, preserve_index=False)
     responses = [FakeResponse(FakeArrowBatch(ipc, table.num_rows))]
@@ -372,7 +372,7 @@ def test_encode_empty_dataframe_roundtrips():
 
 
 # --------------------------------------------------------------------------- #
-# Real pyspark protos when available (optional — skipped if pyspark missing)
+# Real pyspark protos when available (optional - skipped if pyspark missing)
 # --------------------------------------------------------------------------- #
 pyspark_proto = pytest.importorskip(
     "pyspark.sql.connect.proto.base_pb2",

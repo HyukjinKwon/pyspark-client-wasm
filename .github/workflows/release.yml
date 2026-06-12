@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# release.yml — publish pyspark-connect-web on a version tag.
+# release.yml - publish pyspark-connect-web on a version tag.
 #
 # Mirrors the maintainer's sibling release flows (spark-connect-ruby /
 # spark-connect-scala3): semantic-version tag push -> build the language
@@ -91,7 +91,7 @@ jobs:
           python -c "import pyspark_connect_web; print('import OK', pyspark_connect_web.__name__)"
 
       - name: Assert the wheel declares no grpcio dependency (DECISIONS.md #1)
-        # Same assertion as ci.yml's build-wheel job — the publish path must carry
+        # Same assertion as ci.yml's build-wheel job - the publish path must carry
         # the identical guard so a regression can never ship to PyPI.
         run: |
           python - <<'PY'
@@ -122,7 +122,7 @@ jobs:
           if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
             tag="${GITHUB_REF_NAME#v}"
             if [ "${tag}" != "${version}" ]; then
-              echo "::error::tag '${GITHUB_REF_NAME}' (=> ${tag}) != package version '${version}' — bump pyproject.toml version to match the tag."
+              echo "::error::tag '${GITHUB_REF_NAME}' (=> ${tag}) != package version '${version}' - bump pyproject.toml version to match the tag."
               exit 1
             fi
             echo "tag ${GITHUB_REF_NAME} matches package version ${version}"
@@ -185,7 +185,7 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # 3a. Publish to PyPI via OIDC trusted publishing — REAL TAG PUSHES ONLY.
+  # 3a. Publish to PyPI via OIDC trusted publishing - REAL TAG PUSHES ONLY.
   #     No API token: the `pypi` environment is the trusted publisher.
   # ---------------------------------------------------------------------------
   publish-pypi:
@@ -206,7 +206,7 @@ jobs:
           path: dist
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        # No `password:` — trusted publishing uses the OIDC id-token above.
+        # No `password:` - trusted publishing uses the OIDC id-token above.
         # `repository-url` defaults to the real PyPI.
 
   # ---------------------------------------------------------------------------

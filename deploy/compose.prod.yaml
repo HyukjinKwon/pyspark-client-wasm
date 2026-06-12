@@ -12,7 +12,7 @@
 #   * envoy publishes TLS ports 8443 (grpc-web) / 8444 (static) and 8089 (probe)
 #     instead of the dev 8081/8000; admin (:9901) is NOT published.
 #   * a ./certs dir is bind-mounted read-only into the proxy for the TLS cert.
-#   * spark-connect's gRPC port is NO LONGER published to the host — in prod the
+#   * spark-connect's gRPC port is NO LONGER published to the host - in prod the
 #     Connect server is private; only the proxy is public. (The dev base maps
 #     15002:15002 for the native reference generator; we drop that mapping here.)
 #
@@ -23,7 +23,7 @@
 #   2. Replace the placeholder origins/hosts in deploy/envoy.prod.yaml
 #      (YOUR-PUBLIC-HOST / YOUR-LITE-ORIGIN), or render them from env with
 #      scripts/render_envoy_prod.sh.
-#   3. Put real auth in front (jwt_authn / ext_authz) — the shipped Lua gate only
+#   3. Put real auth in front (jwt_authn / ext_authz) - the shipped Lua gate only
 #      rejects requests with no Bearer token; it does not validate it.
 
 services:

@@ -189,11 +189,3 @@ Browser end-to-end tests run under Playwright against the deploy stack; see
 [`docs/running-locally.md`](docs/running-locally.md). Contribution workflow and
 the lane/coordination model: [`CONTRIBUTING.md`](CONTRIBUTING.md) and
 [`COORDINATION.md`](COORDINATION.md).
-
-## License
-
-Apache License 2.0 - see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
-
-Independent project; not an Apache Software Foundation project. "Apache Spark",
-"Spark", and "PySpark" are trademarks of the Apache Software Foundation, used
-here only to describe interoperability.

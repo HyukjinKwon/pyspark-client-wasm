@@ -40,10 +40,16 @@ services:
         --packages org.apache.spark:spark-connect_2.13:4.0.0
         --conf spark.connect.grpc.binding.address=0.0.0.0
         --conf spark.connect.grpc.binding.port=15002
-        && tail -f /opt/spark/logs/*.out
+        --conf spark.jars.ivy=/tmp/.ivy2
     environment:
-      # Pin the JVM/driver memory small enough for a laptop.
-      SPARK_NO_DAEMONIZE: "false"
+      # The apache/spark image runs as a user whose HOME is /nonexistent, so Ivy
+      # (used to resolve --packages) cannot write its cache and the server dies
+      # with FileNotFoundException. Point HOME (and the Ivy dir, above) at /tmp.
+      HOME: "/tmp"
+      # Run the Connect server in the FOREGROUND so the container stays alive on
+      # that process. The daemon wrapper backgrounds then exits, which made the
+      # container exit (1) before it was ever healthy.
+      SPARK_NO_DAEMONIZE: "true"
     expose:
       - "15002"
     # Exposed on the host too, so the reference-result generator
@@ -58,7 +64,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 60s
+      # Generous: first start resolves the Spark Connect package via Ivy
+      # (network) and warms up the JVM.
+      start_period: 120s
 
   static:
     # Tiny static file server for the built JupyterLite site. The site is

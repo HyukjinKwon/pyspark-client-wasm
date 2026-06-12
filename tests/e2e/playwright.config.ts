@@ -16,8 +16,9 @@ const BASE_URL = process.env.E2E_BASE_URL || "http://localhost:8000";
 export default defineConfig({
   testDir: ".",
   testMatch: /.*\.spec\.ts/,
-  // JupyterLite + Pyodide cold start (download + import pyspark) is slow.
-  timeout: 180_000,
+  // Pyodide cold start (loadPackage pyarrow/pandas + micropip pyspark + the
+  // wheel) runs fresh on each test's page load and is slow.
+  timeout: 300_000,
   expect: { timeout: 30_000 },
   fullyParallel: false,
   reporter: process.env.CI ? "github" : "list",

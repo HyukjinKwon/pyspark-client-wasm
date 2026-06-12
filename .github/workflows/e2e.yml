@@ -48,10 +48,10 @@ jobs:
   e2e:
     name: headless-browser e2e (DECISIONS.md "v0 done =")
     runs-on: ubuntu-latest
-    # Cold Spark Connect boot (Ivy --packages download ~1 min) + Pyodide cold
-    # start + chromium download all add up; give it room but cap it so a hung
-    # stream cannot burn an hour.
-    timeout-minutes: 30
+    # Cold Spark Connect boot (Ivy --packages download ~1 min) + chromium +
+    # Pyodide cold start, which reruns per test (each test reloads the harness),
+    # all add up; give it room but cap it so a hung stream cannot burn an hour.
+    timeout-minutes: 45
 
     env:
       PCW_OUTPUT_DIR: _output

@@ -130,6 +130,21 @@ jobs:
       - name: Build wheel + JupyterLite site (make site)
         run: make site
 
+      - name: Build + host a PySpark wheel (PyPI has sdist only)
+        run: |
+          set -euxo pipefail
+          # micropip needs a WHEEL; pyspark ships only an sdist on PyPI. Build a
+          # pure wheel from the (already pip-installed) pyspark 4.0.0 and host it
+          # same-origin. micropip resolves its one pure dep (py4j) from PyPI.
+          pip wheel "pyspark==4.0.0" --no-deps -w "${PCW_OUTPUT_DIR}/"
+          built="$(ls "${PCW_OUTPUT_DIR}"/pyspark-4.0.0-*.whl | head -1)"
+          # Normalize to the universal tag the worker references statically.
+          if [ "$built" != "${PCW_OUTPUT_DIR}/pyspark-4.0.0-py2.py3-none-any.whl" ]; then
+            mv "$built" "${PCW_OUTPUT_DIR}/pyspark-4.0.0-py2.py3-none-any.whl"
+          fi
+          test -f "${PCW_OUTPUT_DIR}/pyspark-4.0.0-py2.py3-none-any.whl" \
+            || { echo "::error::pyspark wheel not built"; exit 1; }
+
       - name: Vendor Pyodide into the site (self-host, same-origin)
         run: |
           set -euxo pipefail

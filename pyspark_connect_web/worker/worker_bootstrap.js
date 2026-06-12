@@ -39,14 +39,19 @@ const PURE_PYODIDE_PKGS = ["micropip", "pyarrow", "pandas", "numpy", "zstandard"
 const MICROPIP_PKGS = [
   "protobuf>=7",
   // pure-Python, required by pyspark.sql.connect (google.rpc.*); NOT in Pyodide.
+  // These have pure wheels on PyPI, which micropip reaches from the browser.
   "googleapis-common-protos>=1.56.4",
-  // Pin to match the Spark Connect server version (deploy/ uses
-  // apache/spark:4.0.0). A newer client reads configs a 4.0.0 server lacks
-  // (e.g. SPARK-53525's localRelationChunkSizeRows) -> SQL_CONF_NOT_FOUND.
-  "pyspark==4.0.0",
-  // The wheel is served at the site root. micropip needs a resolvable URL (a
-  // bare filename would be treated as a PyPI package name), so default to an
-  // origin-absolute URL. Overridable via self.PCW_WHEEL_URL.
+  // PySpark is sdist-only on PyPI (no wheel), so micropip cannot install it by
+  // name. We build a wheel in CI and host it same-origin; micropip then pulls
+  // its one pure dep (py4j) from PyPI. Version 4.0.0 matches the Spark Connect
+  // server image (a newer client reads configs a 4.0.0 server lacks ->
+  // SQL_CONF_NOT_FOUND). Overridable via self.PCW_PYSPARK_WHEEL_URL.
+  self.PCW_PYSPARK_WHEEL_URL ||
+    new URL(
+      "/pyspark-4.0.0-py2.py3-none-any.whl",
+      self.location.origin,
+    ).href,
+  // The pyspark_connect_web wheel is served at the site root too.
   self.PCW_WHEEL_URL ||
     new URL(
       "/pyspark_connect_web-0.0.1.dev0-py3-none-any.whl",

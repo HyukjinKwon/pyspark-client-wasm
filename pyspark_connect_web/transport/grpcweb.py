@@ -55,6 +55,36 @@ except Exception:  # pragma: no cover
 # vendor copies (DECISIONS.md #2).
 from pyspark.sql.connect import proto as _pb  # type: ignore
 
+import sys as _sys
+
+
+def _transport_unavailable(message: str) -> Exception:
+    """Build a *retryable* ``grpc.RpcError`` for a transport connection failure.
+
+    A dropped/aborted fetch is the gRPC equivalent of UNAVAILABLE. PySpark's
+    retry policy only retries ``grpc.RpcError`` whose ``code()`` is UNAVAILABLE
+    (retries.py), and its reattachable iterator then issues a fresh ExecutePlan /
+    ReattachExecute. We fetch ``grpc`` from ``sys.modules`` (the real grpcio, or
+    our stub in Pyodide) WITHOUT a literal ``import grpc`` so the package's
+    no-grpcio guard (DECISIONS.md #1) still holds.
+    """
+    grpc = _sys.modules.get("grpc")
+    rpc_error_base = getattr(grpc, "RpcError", Exception) if grpc else Exception
+    status_code = getattr(grpc, "StatusCode", None) if grpc else None
+    unavailable = getattr(status_code, "UNAVAILABLE", None)
+
+    class _WebRpcError(rpc_error_base):  # type: ignore[misc, valid-type]
+        def code(self):  # noqa: D401 - grpc.Call interface
+            return unavailable
+
+        def details(self):
+            return message
+
+        def __str__(self):
+            return message
+
+    return _WebRpcError(message)
+
 
 Metadata = Sequence[Tuple[str, str]]
 
@@ -397,13 +427,18 @@ class GrpcWebStub:
                         yield response_cls.FromString(frame.payload)
         except SparkConnectGrpcException:
             raise  # a real server error (bad trailer / compressed frame): surface it
-        except Exception:
-            # The transport itself failed mid-stream (e.g. an aborted/dropped
-            # fetch raises TransportError from the channel). Treat it exactly like
-            # a trailer-less drop: end cleanly so the reattachable iterator
-            # recovers via ReattachExecute. A persistent failure simply recurs and
-            # the reattach retry budget eventually surfaces it (it will not hang).
-            return
+        except Exception as e:
+            # The transport itself failed (e.g. an aborted/dropped fetch raises
+            # TransportError from the channel). Surface it as a RETRYABLE gRPC
+            # UNAVAILABLE so PySpark's retry recreates the call (a fresh
+            # ExecutePlan / ReattachExecute) instead of looping. Raising (not
+            # returning StopIteration) is important: an aborted *initial* request
+            # never started a server operation, so reattach alone would spin
+            # forever resuming a non-existent operation; the outer retry budget
+            # bounds it and recovers on the next attempt.
+            raise _transport_unavailable(
+                f"grpc-web transport failed ({path}): {e}"
+            ) from e
 
         if not saw_trailer:
             # Broken stream (no terminating trailer; a trailing partial frame in

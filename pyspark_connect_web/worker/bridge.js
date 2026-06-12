@@ -215,7 +215,7 @@ class Bridge {
         const kind = timedOut ? "timeout" : isAbort ? "abort" : "error";
         const msg = timedOut
           ? `fetch timed out after ${header.timeout}s`
-          : `fetch failed: ${e && e.message ? e.message : e}`;
+          : `fetch failed for ${header.url}: ${e && e.message ? e.message : e}`;
         this._writeError(msg, kind);
         return;
       } finally {

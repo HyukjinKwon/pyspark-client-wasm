@@ -48,6 +48,14 @@ static_resources:
                   virtual_hosts:
                     - name: grpcweb_host
                       domains: ["*"]
+                      # The calling page is cross-origin isolated (COOP/COEP).
+                      # Cross-Origin-Resource-Policy: cross-origin lets that page
+                      # read this cross-origin grpc-web response under COEP.
+                      response_headers_to_add:
+                        - header:
+                            key: "Cross-Origin-Resource-Policy"
+                            value: "cross-origin"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
                       # Permissive CORS for the grpc-web endpoint so a browser
                       # served from any origin (e.g. the :8000 static host, or
                       # a JupyterLite deployment elsewhere) can call it.

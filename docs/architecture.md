@@ -17,27 +17,34 @@ reattachable-execute iterator all stay as upstream PySpark.
 
 ## End-to-end picture
 
-```
-  user PySpark code (unchanged)
-        |
-  pyspark.sql.connect.DataFrame / functions          <- untouched upstream
-        |  builds protobuf plan
-  SparkConnectClient  --patched (the components)-->  grpc-web stub (the components)
-                                                  |  frames: [flags][len][msg], trailer 0x80
-                                                  v
-                              SyncChannel (the components): Atomics + SharedArrayBuffer
-                                                  |  worker blocks; main thread does fetch()
-                                                  v  HTTP/1.1 grpc-web over fetch
-                              +-----------------------------------------+
-                              |  Envoy (the components)                          |
-                              |   :8081  grpc_web filter + CORS          |
-                              |   :8000  static JupyterLite + COOP/COEP  |
-                              +-----------------------------------------+
-                                                  |  gRPC / HTTP2
-                                                  v
-                              Spark Connect server (Spark 4.x, :15002)
-        ^
-  Arrow IPC result batches --decode (the components)--> pandas
+```mermaid
+flowchart TD
+    U["User PySpark code (unchanged)"]
+    DF["pyspark.sql.connect: DataFrame / functions (untouched upstream)"]
+    SCC["SparkConnectClient"]
+    STUB["grpc-web stub (patched) - length-prefixed frames, 0x80 trailer"]
+    CH["SyncChannel - Atomics + SharedArrayBuffer (worker blocks; main thread does fetch)"]
+    ENVOY["Envoy proxy - :8081 grpc_web filter + CORS, :8000 static JupyterLite + COOP/COEP"]
+    SPARK["Spark Connect server (Spark 4.x, :15002)"]
+    PD["pandas DataFrame"]
+
+    U --> DF
+    DF -->|builds protobuf plan| SCC
+    SCC -->|patched stub| STUB
+    STUB --> CH
+    CH -->|grpc-web over fetch| ENVOY
+    ENVOY -->|gRPC over HTTP/2| SPARK
+    SPARK -.->|Arrow IPC result batches| CH
+    CH -.->|decode| PD
+    PD -.-> U
+
+    subgraph browser["Browser (cross-origin isolated)"]
+        U
+        DF
+        SCC
+        STUB
+        CH
+    end
 ```
 
 ## Lane map

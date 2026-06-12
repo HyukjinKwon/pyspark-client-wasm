@@ -30,13 +30,20 @@ grpc-web proxy. The browser does **not** run Spark; it builds plans and renders
 results. The win is: no Python *backend*, the real PySpark API, anywhere a
 browser runs.
 
-```
-  user PySpark code (unchanged)
-        |  builds protobuf plan
-  SparkConnectClient -- patched stub --> grpc-web over fetch
-        |                                     |
-        v                                     v
-  pandas  <-- Arrow IPC --  Envoy grpc_web proxy --> Spark Connect server (Spark 4.x)
+```mermaid
+flowchart LR
+    U["User PySpark code (unchanged)"]
+    SCC["SparkConnectClient"]
+    ENVOY["Envoy grpc_web proxy"]
+    SPARK["Spark Connect server (Spark 4.x)"]
+    PD["pandas"]
+
+    U -->|builds protobuf plan| SCC
+    SCC -->|patched stub: grpc-web over fetch| ENVOY
+    ENVOY --> SPARK
+    SPARK -->|Arrow IPC| ENVOY
+    ENVOY -->|decode| PD
+    PD --> U
 ```
 
 ## Where to go next

@@ -78,7 +78,13 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.details
-  - pymdownx.superfences
+  # ```mermaid``` fenced blocks render as diagrams. Material for MkDocs bundles
+  # and initializes mermaid.js for this custom fence (no extra plugin needed).
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite

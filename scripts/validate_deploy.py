@@ -51,7 +51,7 @@ def main() -> int:
             "Cross-Origin-Opener-Policy",
             "same-origin",
             "Cross-Origin-Embedder-Policy",
-            "require-corp",
+            "credentialless",
         ):
             if needle not in text:
                 print(f"FAIL coi-header   {f}: missing {needle!r} (DECISIONS.md #4)")
@@ -62,7 +62,7 @@ def main() -> int:
                 "Cross-Origin-Opener-Policy",
                 "same-origin",
                 "Cross-Origin-Embedder-Policy",
-                "require-corp",
+                "credentialless",
             )
         ):
             print(f"OK   coi-headers  {f}")

@@ -126,7 +126,7 @@ PY
 # --- 4. sanity checks (these must hold for the bridge to work) -------------
 grep -q 'Cross-Origin-Opener-Policy: same-origin' "$OUTPUT_DIR/_headers" \
   || die "COOP missing from $OUTPUT_DIR/_headers (DECISIONS.md #4)"
-grep -q 'Cross-Origin-Embedder-Policy: require-corp' "$OUTPUT_DIR/_headers" \
+grep -q 'Cross-Origin-Embedder-Policy: credentialless' "$OUTPUT_DIR/_headers" \
   || die "COEP missing from $OUTPUT_DIR/_headers (DECISIONS.md #4)"
 ls "$OUTPUT_DIR"/pyspark_connect_web-*.whl >/dev/null 2>&1 \
   || die "wheel not copied into $OUTPUT_DIR"

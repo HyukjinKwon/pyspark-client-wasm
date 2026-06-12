@@ -19,7 +19,7 @@ Envoy :8000  -- static site (COOP/COEP) -->  JupyterLite (./_output)
 | Port | Who | What |
 |------|-----|------|
 | 8081 | browser client | grpc-web endpoint. Client URL: `sc://localhost:8081/;transport=grpcweb` |
-| 8000 | browser | JupyterLite site, served with `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` |
+| 8000 | browser | JupyterLite site, served with `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: credentialless` |
 | 15002 | native clients / Envoy upstream | Spark Connect raw gRPC. Also exposed on the host for `tests/e2e/reference.py` |
 | 9901 | ops | Envoy admin |
 
@@ -160,5 +160,5 @@ curl -i -X OPTIONS http://localhost:8081/spark.connect.SparkConnectService/Execu
 # Static host should carry the isolation headers:
 curl -sI http://localhost:8000/ | grep -i 'cross-origin'
 # expect: Cross-Origin-Opener-Policy: same-origin
-#         Cross-Origin-Embedder-Policy: require-corp
+#         Cross-Origin-Embedder-Policy: credentialless
 ```

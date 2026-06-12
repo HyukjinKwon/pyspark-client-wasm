@@ -9,7 +9,7 @@
 #   * :8000  static file server for the JupyterLite site, serving the
 #            MANDATORY cross-origin-isolation headers (DECISIONS.md #4):
 #                Cross-Origin-Opener-Policy: same-origin
-#                Cross-Origin-Embedder-Policy: require-corp
+#                Cross-Origin-Embedder-Policy: credentialless
 #            SharedArrayBuffer (the Atomics/SAB blocking bridge) refuses to
 #            work without crossOriginIsolated === true, so these are not
 #            optional - e2e asserts crossOriginIsolated before importing.
@@ -109,7 +109,7 @@ static_resources:
                               append_action: OVERWRITE_IF_EXISTS_OR_ADD
                             - header:
                                 key: "Cross-Origin-Embedder-Policy"
-                                value: "require-corp"
+                                value: "credentialless"
                               append_action: OVERWRITE_IF_EXISTS_OR_ADD
                             # Allow the page to embed cross-origin resources it
                             # marks as crossorigin (e.g. CDN wheels) under COEP.

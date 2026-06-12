@@ -54,7 +54,7 @@ function assertIsolated() {
   if (typeof SharedArrayBuffer === "undefined" || self.crossOriginIsolated !== true) {
     throw new Error(
       "Not cross-origin isolated: SharedArrayBuffer is unavailable. Serve the " +
-        "page with COOP: same-origin and COEP: require-corp (DECISIONS.md #4)."
+        "page with COOP: same-origin and COEP: credentialless (DECISIONS.md #4)."
     );
   }
 }

@@ -304,7 +304,7 @@ class _AtomicsBackend:
             # silently busy-spin. The demo asserts this too.
             raise TransportError(
                 "crossOriginIsolated is false: the page must be served with "
-                "COOP: same-origin and COEP: require-corp for SharedArrayBuffer. "
+                "COOP: same-origin and COEP: credentialless for SharedArrayBuffer. "
                 "See DECISIONS.md #4."
             )
 

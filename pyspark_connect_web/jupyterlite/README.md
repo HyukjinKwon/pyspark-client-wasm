@@ -40,7 +40,7 @@ below; lane 5's Envoy/compose sets them for the hosted e2e.
 
 ```
 Cross-Origin-Opener-Policy:   same-origin
-Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Embedder-Policy: credentialless
 ```
 
 These live in `_headers`. The demo notebook asserts `crossOriginIsolated` before
@@ -55,7 +55,7 @@ import http.server, functools
 class H(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
-        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        self.send_header("Cross-Origin-Embedder-Policy", "credentialless")
         super().end_headers()
 http.server.test(HandlerClass=H, port=8000)
 ```
@@ -110,7 +110,7 @@ bundle. With the CLI, place an `index.template.html` (or use
 | **GitHub Pages** | **no** | **Use `coi-serviceworker.js`** - include it as a `<script>` before everything; it injects COOP/COEP via a service worker and reloads once so `crossOriginIsolated` becomes true. |
 | `python -m http.server` (dev) | no | Use the `serve_coi.py` snippet above, or `coi-serviceworker.js`. |
 
-**COEP caveat (all isolated hosts):** `require-corp` blocks any *cross-origin*
+**COEP caveat (all isolated hosts):** `credentialless` blocks any *cross-origin*
 subresource that lacks CORP/CORS headers. The CDN Pyodide build and the wheel
 must be CORS-enabled or hosted same-origin. jsDelivr (the default `pyodideUrl`)
 sends permissive CORS, so it works; if you self-host, copy `pyodide` + the wheel

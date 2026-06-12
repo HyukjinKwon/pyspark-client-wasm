@@ -193,7 +193,7 @@ static_resources:
                               append_action: OVERWRITE_IF_EXISTS_OR_ADD
                             - header:
                                 key: "Cross-Origin-Embedder-Policy"
-                                value: "require-corp"
+                                value: "credentialless"
                               append_action: OVERWRITE_IF_EXISTS_OR_ADD
                             - header:
                                 key: "Cross-Origin-Resource-Policy"

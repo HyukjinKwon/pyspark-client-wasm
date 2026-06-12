@@ -140,7 +140,7 @@ jobs:
           test -f "${PCW_OUTPUT_DIR}/_headers" || { echo "::error::_headers missing from ${PCW_OUTPUT_DIR}"; exit 1; }
           grep -q 'Cross-Origin-Opener-Policy: same-origin' "${PCW_OUTPUT_DIR}/_headers" \
             || { echo "::error::COOP missing from ${PCW_OUTPUT_DIR}/_headers"; exit 1; }
-          grep -q 'Cross-Origin-Embedder-Policy: require-corp' "${PCW_OUTPUT_DIR}/_headers" \
+          grep -q 'Cross-Origin-Embedder-Policy: credentialless' "${PCW_OUTPUT_DIR}/_headers" \
             || { echo "::error::COEP missing from ${PCW_OUTPUT_DIR}/_headers"; exit 1; }
           # The wheel micropip installs in the browser.
           ls "${PCW_OUTPUT_DIR}"/pyspark_connect_web-*.whl >/dev/null 2>&1 \

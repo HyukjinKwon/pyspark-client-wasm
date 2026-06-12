@@ -15,7 +15,7 @@ reason, and update the guard test.
    reattachable execute present). `install()` raises a clear error outside the range.
 4. **Cross-origin isolation is mandatory.** SharedArrayBuffer requires the page to
    be served with `Cross-Origin-Opener-Policy: same-origin` and
-   `Cross-Origin-Embedder-Policy: require-corp`. Envoy/JupyterLite host config
+   `Cross-Origin-Embedder-Policy: credentialless`. Envoy/JupyterLite host config
    MUST set these; e2e MUST assert `crossOriginIsolated === true` before importing.
 5. **`.collect()` stays blocking.** The public PySpark API is synchronous. The
    Atomics/SAB bridge must make the worker block; we do NOT expose an async fork of

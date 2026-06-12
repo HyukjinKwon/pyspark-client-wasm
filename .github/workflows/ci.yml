@@ -43,9 +43,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
       - name: pytest
-        # Only collect unit tests; tests/e2e is Playwright/TS + a native-only
-        # reference generator that needs a live Spark Connect server.
-        run: pytest -q --ignore=tests/e2e
+        # Unit tests only. Excludes:
+        #   tests/e2e         — Playwright/TS, needs a browser + live stack
+        #   tests/integration — needs a real Spark Connect server + real grpcio
+        #                       (covered by the dedicated `integration` job below)
+        # grpcio/grpcio-status are deliberately NOT installed here, so this job
+        # also proves the package imports under the Pyodide constraint (_grpc_shim).
+        run: pytest -q --ignore=tests/e2e --ignore=tests/integration
 
   lint:
     name: lint + format (ruff)

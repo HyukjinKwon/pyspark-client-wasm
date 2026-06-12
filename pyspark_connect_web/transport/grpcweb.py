@@ -33,6 +33,13 @@ from .framing import (
     parse_trailers,
 )
 
+# This module may be imported directly (tests, lane wiring) before the package
+# ``__init__`` runs, and the pyspark imports below transitively do ``import
+# grpc``. Install the grpcio stub first so they resolve without grpcio (Pyodide).
+from .._grpc_shim import install_grpc_shim as _install_grpc_shim
+
+_install_grpc_shim()
+
 # ``SparkConnectGrpcException`` moved between ``pyspark.errors`` and
 # ``pyspark.errors.exceptions.connect`` across versions. API_CONTRACT.md names
 # ``pyspark.errors``; import resiliently so we work across the pinned range

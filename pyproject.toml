@@ -16,8 +16,18 @@ authors = [{ name = "Hyukjin Kwon" }]
 dependencies = []
 
 [project.optional-dependencies]
-# local dev/test only; the browser gets these from Pyodide
-dev = ["pyspark>=4.0,<4.2", "pyarrow>=22", "pandas", "protobuf>=7", "pytest"]
+# local dev/test only; the browser gets these from Pyodide.
+# googleapis-common-protos is pure-Python and required by pyspark.sql.connect
+# (google.rpc.* protos); grpcio / grpcio-status are intentionally absent — the
+# _grpc_shim stubs them, mirroring Pyodide (DECISIONS.md #1).
+dev = [
+    "pyspark>=4.0,<4.2",
+    "pyarrow>=22",
+    "pandas",
+    "protobuf>=7",
+    "googleapis-common-protos>=1.56.4",
+    "pytest",
+]
 
 [tool.setuptools.packages.find]
 include = ["pyspark_connect_web*"]

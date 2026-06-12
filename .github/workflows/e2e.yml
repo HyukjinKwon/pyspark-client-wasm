@@ -12,19 +12,19 @@
 #   * real Spark 4.0.0 Connect server (ExecutePlan/ReattachExecute/ReleaseExecute)
 #   * real Chromium                (Playwright)
 #
-# It asserts the DECISIONS.md "v0 done =" matrix in a real browser, with
+# It asserts the v0 matrix matrix in a real browser, with
 # E2E_REQUIRE_STACK=1 so the checklist items HARD-FAIL (not skip) in CI:
-#   1. crossOriginIsolated === true                              (DECISIONS.md #4)
+#   1. crossOriginIsolated === true
 #   2. spark.range(10).collect() == 10 rows
-#   3. filter/select/groupBy/agg toPandas == native reference    (DECISIONS.md #7)
+#   3. filter/select/groupBy/agg toPandas == native reference
 #   4. createDataFrame(pandas_df) round-trips
 #   5. spark.sql("select 1 as x").collect() works
-#   6. mid-stream disconnect recovers via ReattachExecute        (DECISIONS.md #6)
+#   6. mid-stream disconnect recovers via ReattachExecute
 #
 # This is a SEPARATE workflow from ci.yml (unit/lint/grpcio-guard/headers/wheel);
 # ci.yml stays the cheap, always-on gate. This one is heavier (docker + browser)
 # and is expected to be flaky on its FIRST real runs - see the candid notes at the
-# bottom of team/findings-lane5-deploy.md.
+# bottom of the project notes.
 
 name: e2e
 
@@ -46,7 +46,7 @@ permissions:
 
 jobs:
   e2e:
-    name: headless-browser e2e (DECISIONS.md "v0 done =")
+    name: headless-browser e2e
     runs-on: ubuntu-latest
     # Cold Spark Connect boot (Ivy --packages download ~1 min) + chromium +
     # Pyodide cold start, which reruns per test (each test reloads the harness),
@@ -118,7 +118,7 @@ jobs:
           # Reference generator (tests/e2e/reference.py) uses the NATIVE PySpark
           # Connect client to produce ground-truth results -> it needs real
           # grpcio + grpcio-status. That is fine here: reference.py lives under
-          # tests/, outside the package; DECISIONS.md #1 only forbids grpcio
+          # tests/, outside the package;  only forbids grpcio
           # *inside* pyspark_connect_web/.
           #
           # Pin pyspark to EXACTLY match the server image (apache/spark:4.0.0).
@@ -170,7 +170,7 @@ jobs:
           set -euxo pipefail
           test -d "${PCW_OUTPUT_DIR}" || { echo "::error::${PCW_OUTPUT_DIR} not built"; exit 1; }
           ls -la "${PCW_OUTPUT_DIR}"
-          # COOP/COEP _headers (DECISIONS.md #4) - without these the browser is
+          # COOP/COEP _headers - without these the browser is
           # not cross-origin isolated and SharedArrayBuffer is unavailable.
           test -f "${PCW_OUTPUT_DIR}/_headers" || { echo "::error::_headers missing from ${PCW_OUTPUT_DIR}"; exit 1; }
           grep -q 'Cross-Origin-Opener-Policy: same-origin' "${PCW_OUTPUT_DIR}/_headers" \

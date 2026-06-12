@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Lane 2 guard tests for the monkey-patch + integration layer.
 
-These tests stub lane 1's stub and lane 3's channel with fakes -- they do NOT
+These tests stub the stub and the channel with fakes -- they do NOT
 require a real Spark Connect server, ``grpcio``, or a browser. They assert:
 
 * ``install()`` is idempotent.
@@ -22,10 +22,10 @@ from pyspark_connect_web._contract import HttpResponse
 
 
 # ---------------------------------------------------------------------------
-# Fakes for lanes 1 and 3 (no grpcio, no browser, no server).
+# Fakes for the components and 3 (no grpcio, no browser, no server).
 # ---------------------------------------------------------------------------
 class FakeSyncChannel:
-    """Stand-in for lane 3's SabSyncChannel -- implements the SyncChannel proto."""
+    """Stand-in for the SabSyncChannel -- implements the SyncChannel proto."""
 
     def __init__(self, base_url: str):
         self.base_url = base_url
@@ -42,7 +42,7 @@ class FakeSyncChannel:
 
 
 class FakeStub:
-    """Stand-in for lane 1's GrpcWebStub -- just records what it was built with."""
+    """Stand-in for the GrpcWebStub -- just records what it was built with."""
 
     def __init__(self, channel, metadata=None):
         self.channel = channel
@@ -51,7 +51,7 @@ class FakeStub:
 
 @pytest.fixture
 def fakes():
-    """Install fake lane-1 stub + lane-3 channel factories, restore afterwards."""
+    """Install fake the stub + the channel factories, restore afterwards."""
     pcw_patch.set_channel_factory(lambda ep: FakeSyncChannel(ep.base_url))
     pcw_patch.set_stub_factory(lambda ch: FakeStub(ch.channel, list(ch.params.items())))
     try:

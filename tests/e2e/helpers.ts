@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Shared helpers for the e2e harness (lane 5).
+// Shared helpers for the e2e harness (the components).
 //
-// These drive lane 3's in-page bridge: `window.__pcwRunPython(src)` runs a
+// These drive the in-page bridge: `window.__pcwRunPython(src)` runs a
 // Python snippet in the Pyodide worker/kernel and resolves with the snippet's
 // string output (we have the snippet `print(json.dumps(...))` so we can parse
 // it back to a value). See pyspark_connect_web/jupyterlite/run_python_bridge.js.
@@ -10,10 +10,10 @@
 // Graceful-degradation contract:
 //   * isStackUp() gates the whole suite - if the JupyterLite page is unreachable
 //     the specs skip (unless E2E_REQUIRE_STACK=1).
-//   * bridgeAvailable() additionally checks that lane 3 actually exposed
+//   * bridgeAvailable() additionally checks that the actually exposed
 //     window.__pcwRunPython on this page. If the page is up but the bridge is
 //     NOT wired (e.g. JupyterLite-kernel integration still pending - see
-//     team/findings-lane3-bridge.md open item #1), the bridge-dependent specs
+//     the project notes open item #1), the bridge-dependent specs
 //     skip with a clear reason instead of hanging or failing red - UNLESS
 //     E2E_REQUIRE_STACK=1, in which case a missing bridge is a hard failure.
 
@@ -47,7 +47,7 @@ export async function isStackUp(baseURL: string): Promise<boolean> {
 /**
  * Read `crossOriginIsolated` from the loaded page. Implementable today: it is a
  * standard browser global and depends only on the server (Envoy) sending
- * COOP/COEP. DECISIONS.md #4.
+ * COOP/COEP. .
  */
 export async function crossOriginIsolated(page: Page): Promise<boolean> {
   return await page.evaluate(
@@ -56,7 +56,7 @@ export async function crossOriginIsolated(page: Page): Promise<boolean> {
 }
 
 /**
- * Is lane 3's `window.__pcwRunPython` bridge present on this page? Returns false
+ * Is the `window.__pcwRunPython` bridge present on this page? Returns false
  * (rather than throwing) when the page loaded but the bridge was never wired, so
  * specs can skip gracefully. We probe for the function's existence only; we do
  * NOT execute Python here (that may be expensive / require a ready kernel).
@@ -72,7 +72,7 @@ export async function bridgeAvailable(page: Page): Promise<boolean> {
 }
 
 /**
- * Wait until lane 3's bridge is present AND the kernel can execute a trivial
+ * Wait until the bridge is present AND the kernel can execute a trivial
  * snippet (kernel booted, pyspark_connect_web installed, SparkSession bound).
  *
  * Contract (pyspark_connect_web/jupyterlite/run_python_bridge.js):
@@ -124,7 +124,7 @@ export async function runPython(page: Page, src: string): Promise<unknown> {
 
 /**
  * Force a mid-stream disconnect of an in-flight ExecutePlan to exercise the
- * ReattachExecute recovery path (DECISIONS.md #6).
+ * ReattachExecute recovery path.
  *
  * Strategy: intercept the *next* ExecutePlan POST to the grpc-web endpoint and
  * abort it after the response has started, so PySpark's reattachable iterator
@@ -133,7 +133,7 @@ export async function runPython(page: Page, src: string): Promise<unknown> {
  * of the test's RPCs) proceed normally.
  *
  * This works at the network layer (Playwright page.route) and needs no special
- * hook from lane 3 - it interrupts the grpc-web fetch the main-thread bridge
+ * hook from the - it interrupts the grpc-web fetch the main-thread bridge
  * issues. The grpc-web path is matched loosely so it survives Envoy host/port
  * differences (it keys off the SparkConnectService/ExecutePlan path segment).
  */

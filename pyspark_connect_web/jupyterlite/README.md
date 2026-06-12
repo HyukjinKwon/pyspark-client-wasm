@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# JupyterLite packaging (lane 3)
+# JupyterLite packaging (the components)
 
 Build a JupyterLite site that runs the PySpark Connect client in Pyodide, with
 the COOP/COEP headers required for the Atomics/SharedArrayBuffer bridge.
@@ -31,9 +31,9 @@ jupyter lite serve --output-dir _output
 
 `jupyter lite serve` / `python -m http.server` do **not** set COOP/COEP by
 default. For local dev use a server that honours `_headers`, or the tiny helper
-below; lane 5's Envoy/compose sets them for the hosted e2e.
+below; the Envoy/compose sets them for the hosted e2e.
 
-## Cross-origin isolation (mandatory - DECISIONS.md #4)
+## Cross-origin isolation (mandatory - )
 
 `SharedArrayBuffer` and `Atomics.wait` only exist when the page is
 **cross-origin isolated**:
@@ -121,8 +121,7 @@ into the site root and point `pyodideUrl`/`PCW_WHEEL_URL` at them.
 - **Wheel URL**: `worker_bootstrap.js` reads `self.PCW_WHEEL_URL` (standalone
   harness). Inside JupyterLite the wheel is `micropip.install`-ed from the site
   root by the demo notebook; the lite build serves it there.
-- **Endpoint**: the demo uses `sc://localhost:8081/;transport=grpcweb` (lane 5's
-  Envoy). CORS on Envoy must allow the lite origin (lane 5 owns that).
+- **Endpoint**: the demo uses `sc://localhost:8081/;transport=grpcweb` (the Envoy). CORS on Envoy must allow the lite origin (the owns that).
 - **Real-browser validation**: the kernel `Worker`-wrap + SAB handshake +
   `crossOriginIsolated` can only be confirmed in a cross-origin-isolated browser
-  with lane 5's stack up - see `team/findings-lane3-bridge.md` "needs a browser".
+  with the stack up - see `the project notes` "needs a browser".

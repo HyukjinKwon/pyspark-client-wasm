@@ -20,7 +20,7 @@ Cross-Origin-Embedder-Policy: require-corp
 
 The demo notebook asserts `crossOriginIsolated === true` before importing, so a
 misconfigured host fails loud and early instead of hanging on a non-shared
-buffer. This is a hard invariant (`DECISIONS.md` #4).
+buffer. This is a hard invariant (`the design notes` #4).
 
 ## Hosting matrix - which host needs what
 

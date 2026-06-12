@@ -14,7 +14,7 @@ this module is the stable public surface (``install`` + ``__version__``).
 from __future__ import annotations
 
 # PySpark's ``pyspark.sql.connect`` stack does ``import grpc`` at module load,
-# but grpcio is absent in Pyodide (DECISIONS.md #1). Register a stub *before*
+# but grpcio is absent in Pyodide. Register a stub *before*
 # anything pulls in pyspark so those imports resolve. No-op if real grpcio is
 # present (local dev / CI parity), so we never shadow the genuine library.
 from ._grpc_shim import install_grpc_shim as _install_grpc_shim

@@ -18,7 +18,7 @@ The JS glue lives next to this module:
                               the SAB + ``Atomics.wait`` protocol.
 
 The exact SAB layout and Atomics handshake are documented in
-``team/findings-lane3-bridge.md``.
+``the project notes``.
 """
 from __future__ import annotations
 

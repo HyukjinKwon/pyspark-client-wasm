@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Blocking ``SyncChannel`` backed by SharedArrayBuffer + Atomics.
 
-This module is the Python half of lane 3's bridge. It implements the
+This module is the Python half of the bridge. It implements the
 ``SyncChannel`` protocol (see ``pyspark_connect_web/_contract.py``):
 
     class SyncChannel(Protocol):
@@ -10,7 +10,7 @@ This module is the Python half of lane 3's bridge. It implements the
 
 The whole point of this class is that ``unary``/``server_stream`` *block the
 calling thread* until bytes arrive, so PySpark's synchronous ``.collect()`` keeps
-working unchanged (DECISIONS.md #5). In the browser the calling thread is a Web
+working unchanged. In the browser the calling thread is a Web
 Worker; blocking it with ``Atomics.wait`` is fine and is the only place
 ``Atomics.wait`` is even allowed.
 
@@ -19,7 +19,7 @@ Two backends, selected at runtime:
 * **Pyodide / browser** (``sys.platform == "emscripten"`` or the ``js`` module is
   importable): :class:`_AtomicsBackend` drives the SAB + ``Atomics.wait``
   handshake against ``bridge.js`` on the main thread. The wire layout is
-  documented in ``team/findings-lane3-bridge.md``.
+  documented in ``the project notes``.
 
 * **Local / tests** (anything else): a pluggable :class:`SyncBackend` you inject.
   ``tests/test_sab_channel.py`` injects a fake so the full API is exercisable
@@ -62,12 +62,11 @@ class TransportError(RuntimeError):
     """A request failed at the transport (browser/fetch/SAB) layer.
 
     This is *not* a gRPC-status error - those are carried in the response body's
-    trailer frame and are lane 1's concern. This is a hard transport failure
+    trailer frame and are the concern. This is a hard transport failure
     (network error, main thread gone, SAB protocol violation, isolation missing).
 
     Lane 1 (``GrpcWebStub``) lets this propagate; PySpark surfaces it as the
-    cause of a failed ``.collect()``. For HTTP-level failures we still hand lane
-    1 a valid :class:`HttpResponse` (with the non-200 ``status`` and any
+    cause of a failed ``.collect()``. For HTTP-level failures we still hand the components a valid :class:`HttpResponse` (with the non-200 ``status`` and any
     ``grpc-status`` headers) so it can raise the *correct*
     ``SparkConnectGrpcException`` rather than an opaque transport error - see
     :meth:`_AtomicsBackend.unary`.
@@ -96,8 +95,7 @@ class SyncBackend(Protocol):
         {
           "kind":    "unary" | "server_stream",
           "path":    str,                 # gRPC path
-          "body":    bytes,               # already grpc-web framed by lane 1
-          "headers": dict[str, str],
+          "body":    bytes,               # already grpc-web framed by the "headers": dict[str, str],
           "timeout": float | None,        # seconds
         }
     """
@@ -200,8 +198,8 @@ class SabSyncChannel:
     ) -> Iterator[bytes]:
         request = self._request("server_stream", path, body, headers, timeout)
         # Delegate straight to the backend generator. We intentionally do not
-        # buffer: lane 1's reattachable iterator wants chunks as they arrive so a
-        # mid-stream disconnect (DECISIONS.md #6) is observable promptly.
+        # buffer: the reattachable iterator wants chunks as they arrive so a
+        # mid-stream disconnect is observable promptly.
         return self._backend.server_stream(request)
 
     # -- internals ----------------------------------------------------------- #
@@ -227,7 +225,7 @@ class SabSyncChannel:
 
 # --------------------------------------------------------------------------- #
 # Protocol constants (single source of truth, mirrored by value in bridge.js
-# and worker_bootstrap.js - see team/findings-lane3-bridge.md).
+# and worker_bootstrap.js - see the project notes).
 # --------------------------------------------------------------------------- #
 # Control array indices
 _C_STATE = 0
@@ -267,7 +265,7 @@ class _AtomicsBackend:
     is split between this class and ``bridge.js`` / ``worker_bootstrap.js``. This
     class owns: writing the request into the data region, the ``Atomics.wait``
     blocking loop, **reassembling windowed payloads**, and turning streamed
-    chunks into the iterator lane 1 consumes. ``bridge.js`` owns: fetch + writing
+    chunks into the iterator the consumes. ``bridge.js`` owns: fetch + writing
     response windows back.
     """
 
@@ -299,13 +297,13 @@ class _AtomicsBackend:
         self._transport = transport
 
         if not getattr(js, "crossOriginIsolated", False):
-            # DECISIONS.md #4: SAB requires COOP/COEP. Fail loudly and early -
+            # : SAB requires COOP/COEP. Fail loudly and early -
             # Atomics.wait on a non-shared buffer would either throw or, worse,
             # silently busy-spin. The demo asserts this too.
             raise TransportError(
                 "crossOriginIsolated is false: the page must be served with "
                 "COOP: same-origin and COEP: credentialless for SharedArrayBuffer. "
-                "See DECISIONS.md #4."
+                "See ."
             )
 
         # worker_bootstrap.js normally allocates and hands these in. Allocate
@@ -524,7 +522,7 @@ class _AtomicsBackend:
                 body, headers = b"", {}
             # HTTP errors (status >= 400) are NOT a transport failure - hand lane
             # 1 a valid HttpResponse with the status + any grpc-status headers so
-            # it raises the right SparkConnectGrpcException (API_CONTRACT.md section 1).
+            # it raises the right SparkConnectGrpcException (the transport contract section 1).
             return HttpResponse(status=status, headers=headers, body=body)
         finally:
             self._js.Atomics.store(self._ctrl, _C_STATE, _S_IDLE)
@@ -549,7 +547,7 @@ class _AtomicsBackend:
                 if state != _S_RESP_CHUNK:
                     raise TransportError(f"unexpected SAB state {state} in stream")
                 # One stream chunk may itself be windowed if it exceeds the data
-                # region; reassemble before yielding so lane 1 always sees whole
+                # region; reassemble before yielding so the always sees whole
                 # off-the-wire chunks (it re-frames them downstream).
                 _meta, chunk = self._reassemble_windows(timeout)
                 yield chunk

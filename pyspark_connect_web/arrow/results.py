@@ -8,7 +8,7 @@ Result side - ``decode_arrow_batches``:
     reassemble any batch that SPARK-53525 split across several responses, decode
     each reassembled IPC stream to ``pyarrow.RecordBatch`` objects in row order,
     and build one pandas ``DataFrame``. Correctness (row/type-exactness) is the
-    priority - see DECISIONS.md #7.
+    priority - .
 
 Request side - ``encode_local_relation``:
     ``createDataFrame(pdf)`` ships the local data to the server as a
@@ -185,9 +185,9 @@ def decode_arrow_batches(responses: Iterable[Any]) -> "pd.DataFrame":
     Type fidelity: we convert with ``coerce_temporal_nanoseconds=True`` (the same
     flag PySpark's ``to_pandas`` passes for pyarrow >= 13), so date/timestamp/
     duration units land on pandas' nanosecond types exactly as the native client
-    produces them. See ``team/findings-lane4-arrow.md`` for the type-mapping
+    produces them. See ``the project notes`` for the type-mapping
     boundary (struct handling mode, session timezone) that requires a live client
-    config and so lives in lane 2's integration, not here.
+    config and so lives in the integration, not here.
     """
     import pandas as pd  # local import: pandas is a Pyodide-provided dep
 
@@ -239,7 +239,7 @@ def encode_local_relation(pdf: "pd.DataFrame") -> bytes:
     Note: this is the faithful Arrow representation of the pandas frame. PySpark's
     ``createDataFrame`` additionally applies Spark-side type coercion (e.g.
     tz-naive datetimes -> ``TimestampType``) using session config; that coercion
-    is a lane-2 concern that operates on the resulting ``pa.Table``/schema. Lane 4
+    is a the concern that operates on the resulting ``pa.Table``/schema. Lane 4
     only guarantees the IPC framing is correct and reversible.
     """
     table = pa.Table.from_pandas(pdf, preserve_index=False)

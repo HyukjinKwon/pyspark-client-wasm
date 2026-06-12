@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for lane 4 Arrow result decoding + request-side Arrow encoding.
+"""Tests for the Arrow result decoding + request-side Arrow encoding.
 
 No grpcio, no browser, no server. We build Arrow record batches with pyarrow,
 serialize them to IPC-stream bytes, wrap those bytes in fake

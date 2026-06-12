@@ -20,13 +20,13 @@
 #
 # What this asserts before publishing (reused from ci.yml's build-wheel job):
 #   * the wheel imports under the Pyodide constraint (no grpcio installed), and
-#   * the wheel declares NO grpcio dependency (DECISIONS.md #1).
+#   * the wheel declares NO grpcio dependency.
 #
 # This file is validated statically only (YAML parse + `bash -n` on every inline
 # script); the maintainer's sandbox has no network/docker, so the PyPI upload,
 # OIDC handshake and GitHub Release creation can ONLY be exercised on a real tag
 # push (or a real workflow_dispatch). See the "validated only on a real tag"
-# notes in team/findings-release.md.
+# notes in the project notes.
 
 name: release
 
@@ -86,11 +86,11 @@ jobs:
         run: |
           set -euxo pipefail
           # grpcio is deliberately NOT installed: this proves the package imports
-          # without it, exactly as it must in Pyodide (DECISIONS.md #1, _grpc_shim).
+          # without it, exactly as it must in Pyodide.
           python -m pip install dist/pyspark_connect_web-*.whl
           python -c "import pyspark_connect_web; print('import OK', pyspark_connect_web.__name__)"
 
-      - name: Assert the wheel declares no grpcio dependency (DECISIONS.md #1)
+      - name: Assert the wheel declares no grpcio dependency
         # Same assertion as ci.yml's build-wheel job - the publish path must carry
         # the identical guard so a regression can never ship to PyPI.
         run: |

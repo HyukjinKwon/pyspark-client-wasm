@@ -22,7 +22,7 @@ The `dev` extra installs `pyspark>=4.0,<4.2`, `pyarrow`, `pandas`, `protobuf`,
 `googleapis-common-protos`, and `pytest`. Note what is **deliberately absent**:
 
 * **No `grpcio` / `grpcio-status`.** They are not available in Pyodide and must
-  never be imported (DECISIONS.md #1). The package registers a lightweight gRPC
+  never be imported. The package registers a lightweight gRPC
   shim (`pyspark_connect_web/_grpc_shim.py`) *before* PySpark is imported so
   `import grpc` resolves. The shim is a no-op if real `grpcio` is present, so it
   never shadows the genuine library in environments that happen to have it.
@@ -45,7 +45,7 @@ ruff check pyspark_connect_web
 
 ### Browser end-to-end tests
 
-The full DECISIONS.md "v0 done" matrix runs in a real headless browser against
+The full the v0 matrix matrix runs in a real headless browser against
 the deploy stack:
 
 ```bash
@@ -61,15 +61,15 @@ generator and troubleshooting. When the stack is down the e2e suite skips; set
 
 ## Lanes and coordination
 
-Work is split into **lanes** with frozen interfaces; see [`COORDINATION.md`](COORDINATION.md)
-for the lane map and ownership table, and [`API_CONTRACT.md`](API_CONTRACT.md)
+Work is split into **lanes** with frozen interfaces; see [`CONTRIBUTING.md`](CONTRIBUTING.md)
+for the lane map and ownership table, and the transport contract
 for the stub seam between lanes. Two rules matter most:
 
 * **Don't rewrite a file another lane owns.** Build on the contract.
-* If you need a contract change, edit `API_CONTRACT.md` **and** append a dated
-  note to `COORDINATION.md` first - every other lane builds against those shapes.
+* If you need a contract change, edit `the transport contract` **and** append a dated
+  note to `CONTRIBUTING.md` first - every other lane builds against those shapes.
 
-Keep the [`DECISIONS.md`](DECISIONS.md) invariants green, and add a guard test
+Keep the design notes invariants green, and add a guard test
 when you fix a subtle bug. Apache-2.0 / SPDX header on every source file.
 
 ## Pull requests

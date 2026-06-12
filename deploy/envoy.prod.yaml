@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# PRODUCTION Envoy config for pyspark-connect-web (lane 5).
+# PRODUCTION Envoy config for pyspark-connect-web (the components).
 #
 # This is the HARDENED overlay. The dev config (deploy/envoy.yaml) is permissive
 # on purpose (wildcard CORS, plaintext, no auth) for laptop bring-up. THIS file
@@ -152,7 +152,7 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 
     # ---------------------------------------------------------------------
-    # static site host  (JupyterLite) - TLS + COOP/COEP - DECISIONS.md #4
+    # static site host  (JupyterLite) - TLS + COOP/COEP - 
     # ---------------------------------------------------------------------
     - name: static_listener
       address:
@@ -184,8 +184,7 @@ static_resources:
                       routes:
                         - match: { prefix: "/" }
                           route: { cluster: static-site }
-                          # MANDATORY cross-origin isolation headers (DECISIONS.md
-                          # #4) - same as dev. Required for SharedArrayBuffer.
+                          # MANDATORY cross-origin isolation headers - same as dev. Required for SharedArrayBuffer.
                           response_headers_to_add:
                             - header:
                                 key: "Cross-Origin-Opener-Policy"

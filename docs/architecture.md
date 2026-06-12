@@ -22,14 +22,14 @@ reattachable-execute iterator all stay as upstream PySpark.
         |
   pyspark.sql.connect.DataFrame / functions          <- untouched upstream
         |  builds protobuf plan
-  SparkConnectClient  --patched (lane 2)-->  grpc-web stub (lane 1)
+  SparkConnectClient  --patched (the components)-->  grpc-web stub (the components)
                                                   |  frames: [flags][len][msg], trailer 0x80
                                                   v
-                              SyncChannel (lane 3): Atomics + SharedArrayBuffer
+                              SyncChannel (the components): Atomics + SharedArrayBuffer
                                                   |  worker blocks; main thread does fetch()
                                                   v  HTTP/1.1 grpc-web over fetch
                               +-----------------------------------------+
-                              |  Envoy (lane 5)                          |
+                              |  Envoy (the components)                          |
                               |   :8081  grpc_web filter + CORS          |
                               |   :8000  static JupyterLite + COOP/COEP  |
                               +-----------------------------------------+
@@ -37,7 +37,7 @@ reattachable-execute iterator all stay as upstream PySpark.
                                                   v
                               Spark Connect server (Spark 4.x, :15002)
         ^
-  Arrow IPC result batches --decode (lane 4)--> pandas
+  Arrow IPC result batches --decode (the components)--> pandas
 ```
 
 ## Lane map
@@ -50,7 +50,7 @@ reattachable-execute iterator all stay as upstream PySpark.
 | 4 | Arrow result decoding | `pyspark_connect_web/arrow/*` |
 | 5 | Envoy proxy + e2e + docs | `deploy/*`, `tests/e2e/*`, `docs/*`, `README.md` |
 
-## The stub seam (frozen - API_CONTRACT.md section 1)
+## The stub seam (frozen - the transport contract section 1)
 
 The replacement stub exposes 10 callables with the gRPC-Python calling
 convention `fn(request, *, metadata=None, timeout=None)`. Streaming methods
@@ -58,22 +58,20 @@ convention `fn(request, *, metadata=None, timeout=None)`. Streaming methods
 methods return one proto. Protos come from `pyspark.sql.connect.proto` - we do
 not vendor copies.
 
-Below the stub is the byte boundary: lane 1's stub calls lane 3's `SyncChannel`
+Below the stub is the byte boundary: the stub calls the `SyncChannel`
 (`unary` / `server_stream`), which is **synchronous** - it blocks the worker via
 `Atomics.wait` until the main-thread `fetch` writes the response back through a
-`SharedArrayBuffer`. That blocking is what lets `.collect()` stay synchronous
-(DECISIONS.md #5).
+`SharedArrayBuffer`. That blocking is what lets `.collect()` stay synchronous.
 
-## grpc-web wire framing (lane 1)
+## grpc-web wire framing (the components)
 
 A grpc-web message is length-prefixed frames: `[1 byte flags][4 byte big-endian
 length][payload]`. Flag `0x01` = compressed (rejected), `0x80` = trailer frame
 whose payload is an HTTP-style header block carrying `grpc-status` /
-`grpc-message`. A request can be HTTP 200 yet carry `grpc-status: 13`; lane 1
-turns a non-OK trailer into `SparkConnectGrpcException`. Envoy's `grpc_web`
+`grpc-message`. A request can be HTTP 200 yet carry `grpc-status: 13`; the turns a non-OK trailer into `SparkConnectGrpcException`. Envoy's `grpc_web`
 filter translates between this browser-friendly framing and upstream gRPC.
 
-## Why cross-origin isolation is mandatory (DECISIONS.md #4)
+## Why cross-origin isolation is mandatory
 
 `SharedArrayBuffer` - the backbone of the blocking bridge - is only available
 when the page is **cross-origin isolated**. That requires the page be served
@@ -88,7 +86,7 @@ Envoy's static host (`:8000`) sets both (`deploy/envoy.yaml`). The e2e harness
 asserts `crossOriginIsolated === true` before doing anything else; if it is
 false, the entire bridge is dead, so this is the first checklist gate.
 
-## Reattachable execute (DECISIONS.md #6)
+## Reattachable execute
 
 The client issues `ExecutePlan` + `ReattachExecute` + `ReleaseExecute`. If a
 stream breaks mid-flight, PySpark's own `ExecutePlanResponseReattachableIterator`
@@ -96,7 +94,7 @@ reattaches from the last seen response - but only if our stub implements all
 three calls, not just the initial stream. The e2e harness kills a stream
 mid-flight and asserts the result still completes.
 
-## Invariants (DECISIONS.md)
+## Invariants
 
 1. No `grpcio` inside `pyspark_connect_web/` - ever (not in Pyodide).
 2. We patch, we do not fork pyspark.

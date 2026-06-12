@@ -56,8 +56,8 @@ browser runs.
 
 Early development. The server side (`deploy/`) and the e2e scaffold
 (`tests/e2e/`) are in place; the browser client and the JupyterLite build are in
-progress. See `COORDINATION.md` in the repository for the build plan and
-`DECISIONS.md` for the load-bearing invariants.
+progress. See `CONTRIBUTING.md` in the repository for the build plan and
+`the design notes` for the load-bearing invariants.
 
 ## License
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for the grpc-web stub (lane 1).
+"""Unit tests for the grpc-web stub (the components).
 
 Uses a FAKE in-memory SyncChannel that returns canned framed bytes - no
 network, no grpcio, no browser. Real pyspark protos are used when pyspark is
@@ -16,7 +16,7 @@ import pytest
 from pyspark_connect_web._contract import HttpResponse, grpc_path
 from pyspark_connect_web.transport.framing import encode_message, encode_trailers
 
-# --- guard DECISIONS.md #1: never import grpcio, even transitively here ------
+# --- guard : never import grpcio, even transitively here ------
 pytest.importorskip  # noqa: B018  (kept for clarity; real skips are below)
 
 try:
@@ -41,7 +41,7 @@ pytestmark = pytest.mark.skipif(
 class FakeChannel:
     """In-memory SyncChannel. Records calls; returns pre-seeded bytes.
 
-    Satisfies the lane-3 contract: ``unary`` returns an ``HttpResponse`` with a
+    Satisfies the contract: ``unary`` returns an ``HttpResponse`` with a
     full grpc-web body; ``server_stream`` yields raw frame-byte chunks.
     """
 
@@ -128,7 +128,7 @@ def test_default_metadata_applied():
 
 
 def test_lane2_construction_shape_metadata_kw():
-    """GUARD (lane1<->lane2 seam): lane 2's patch._default_stub_factory builds
+    """GUARD (the transport<->the seam): the patch._default_stub_factory builds
     us as ``GrpcWebStub(sync_channel, metadata=[...])``. That exact call must
     apply the channel-level metadata to every request's headers."""
     ch = FakeChannel(unary_body=_config_response_body())
@@ -290,13 +290,13 @@ def test_server_stream_error_trailer_raises_after_messages():
 
 
 def test_server_stream_dropped_without_trailer_ends_cleanly_for_reattach():
-    """GUARD DECISIONS.md #6 (CORRECTED): a stream that ends with no trailer is a
+    """GUARD  (CORRECTED): a stream that ends with no trailer is a
     dropped connection mid-result. It must end the iterator *cleanly*
     (StopIteration), delivering the messages received so far and NOT raising - so
     PySpark's ``ExecutePlanResponseReattachableIterator`` recovers the rest via
     ReattachExecute.
 
-    Root cause this guards: lane1 originally *raised* ``SparkConnectGrpcException``
+    Root cause this guards: the originally *raised* ``SparkConnectGrpcException``
     here, on the assumption it would make the client reattach. It does the
     opposite - PySpark's retry policy only retries ``grpc.RpcError``, so the raise
     propagated to the user and ReattachExecute never fired. Proven against a real
@@ -350,10 +350,10 @@ def test_client_stream_concatenates_requests():
 # Calling convention: keyword-only metadata/timeout
 # --------------------------------------------------------------------------
 def test_lane2_default_stub_factory_builds_real_stub():
-    """GUARD (lane1<->lane2 seam, end-to-end): drive lane 2's real
+    """GUARD (the transport<->the seam, end-to-end): drive the real
     ``_default_stub_factory`` with a fake SyncChannel and confirm it produces a
     working GrpcWebStub whose Config call round-trips. This catches constructor-
-    signature drift between the lanes (it broke once: metadata= vs base_url)."""
+    signature drift between the components (it broke once: metadata= vs base_url)."""
     patch = pytest.importorskip("pyspark_connect_web.patch")
     ch = FakeChannel(unary_body=_config_response_body())
     web_channel = patch.WebChannel(

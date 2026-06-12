@@ -7,7 +7,7 @@ Connect server fronted by an Envoy `grpc_web` proxy, plus a static host for the
 JupyterLite site that serves the mandatory cross-origin-isolation headers.
 
 ```
-browser (JupyterLite/Pyodide, lane 3)
+browser (JupyterLite/Pyodide, the components)
    |  sc://localhost:8081/;transport=grpcweb   (grpc-web over fetch)
    v
 Envoy :8081  --grpc_web filter-->  Spark Connect :15002 (gRPC/HTTP2)
@@ -46,7 +46,7 @@ browser console:
 crossOriginIsolated === true   // must be true, or SharedArrayBuffer is unavailable
 ```
 
-The JupyterLite site is produced by lane 3 (`jupyterlite build` into `../_output`).
+The JupyterLite site is produced by the (`jupyterlite build` into `../_output`).
 Until that exists, the `:8000` host comes up but serves 404s - the grpc-web proxy
 and Spark Connect server still work and can be exercised by `tests/e2e/reference.py`.
 
@@ -54,12 +54,12 @@ and Spark Connect server still work and can be exercised by `tests/e2e/reference
 
 | Component | Pin | Notes |
 |-----------|-----|-------|
-| Spark Connect server | `apache/spark:4.0.0` | Bundles Connect; matches `pyspark>=4.0,<4.2` (DECISIONS.md #3) |
+| Spark Connect server | `apache/spark:4.0.0` | Bundles Connect; matches `pyspark>=4.0,<4.2` |
 | Spark Connect package | `org.apache.spark:spark-connect_2.13:4.0.0` | Must match Spark + Scala (2.13) version exactly |
 | Envoy | `envoyproxy/envoy:v1.31-latest` | Has `envoy.filters.http.grpc_web` |
 | Static host | `halverneus/static-file-server:v1.8.10` | Serves `../_output` on :80 |
 
-See `team/findings-lane5-deploy.md` for bring-up gotchas (stream timeouts, the
+See `the project notes` for bring-up gotchas (stream timeouts, the
 `--packages` first-run download, COEP and CDN wheels, the gRPC vs grpc-web split).
 
 ## Dev vs prod

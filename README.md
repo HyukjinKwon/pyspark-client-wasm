@@ -44,7 +44,7 @@ patch; we do not fork PySpark. See [`docs/architecture.md`](docs/architecture.md
 * A running Spark Connect server (Spark 4.x) behind an Envoy grpc-web proxy -
   the [`deploy/`](deploy/) stack brings this up for you.
 * The JupyterLite page must be **cross-origin isolated** (`COOP: same-origin` +
-  `COEP: require-corp`), which the deploy stack serves for you. Without it,
+  `COEP: credentialless`), which the deploy stack serves for you. Without it,
   `SharedArrayBuffer` - the backbone of the blocking bridge - is unavailable.
 
 ## Installation
@@ -69,22 +69,43 @@ await micropip.install("pyspark-connect-web")
 
 ## Running a local Spark Connect server
 
-The [`deploy/`](deploy/) stack brings up a Spark 4.0.0 Connect server, an Envoy
+You need a Spark Connect server, and - for the *browser* - an Envoy `grpc_web`
+proxy in front of it (a browser cannot speak raw gRPC). Two options:
+
+### Recommended: the full stack (server + Envoy + site)
+
+The [`deploy/`](deploy/) stack brings up a Spark Connect server, the Envoy
 `grpc_web` proxy, and a static host for the JupyterLite site with the mandatory
-cross-origin-isolation headers:
+cross-origin-isolation headers - everything the browser client needs:
 
 ```bash
 docker compose -f deploy/compose.yaml up
 # wait for the "spark-connect" container to report healthy (~60s cold start)
 ```
 
-This exposes:
-
 | URL | What |
 |-----|------|
-| `sc://localhost:8081/;transport=grpcweb` | grpc-web endpoint the client connects to |
-| <http://localhost:8000/> | JupyterLite site, served with `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` (required for `SharedArrayBuffer`) |
+| `sc://localhost:8081/;transport=grpcweb` | grpc-web endpoint the browser client connects to |
+| <http://localhost:8000/> | JupyterLite site, served with `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: credentialless` (required for `SharedArrayBuffer`) |
 | `:15002` | Spark Connect raw gRPC (native clients / reference generator) |
+
+### Lightweight: just a Spark Connect server (no Docker)
+
+For testing with a **native** PySpark client (or trying Spark Connect without the
+browser), download a Spark release (needs Java 17) and start its Connect server.
+Recent Spark bundles Spark Connect, so **no `--packages` is needed**:
+
+```bash
+SPARK_VERSION=4.1.0   # use the latest 4.1.x: https://spark.apache.org/downloads.html
+curl -LO "https://dlcdn.apache.org/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz"
+tar xzf "spark-${SPARK_VERSION}-bin-hadoop3.tgz" && cd "spark-${SPARK_VERSION}-bin-hadoop3"
+./sbin/start-connect-server.sh
+# -> Spark Connect on sc://localhost:15002  (raw gRPC)
+```
+
+Then a native client can connect: `SparkSession.builder.remote("sc://localhost:15002")`.
+The **browser** client still needs Envoy in front (use the full stack above) -
+`pcw.install()` then talks to `sc://localhost:8081/;transport=grpcweb`.
 
 See [`deploy/README.md`](deploy/README.md) for ports, version pins, and
 CORS/header `curl` checks, and [`docs/running-locally.md`](docs/running-locally.md)
@@ -121,25 +142,66 @@ See [`docs/connection-patterns.md`](docs/connection-patterns.md) and
 [`deploy/README.md`](deploy/README.md) (TLS, CORS allowlist, bearer-token gate ->
 `jwt_authn`/`ext_authz`).
 
-## A quick tour
+## Ways to use it
 
-Runnable scripts live in [`examples/`](examples/). Run any of them against the
-deploy stack (see [`examples/README.md`](examples/README.md)):
+Pick the path that fits - all of them run the *real* PySpark API in the browser.
+
+### 1. In JupyterLite (a notebook, nothing to install)
+
+Build the site and bring up the stack (Spark Connect + Envoy grpc-web + the
+JupyterLite site, served cross-origin isolated on `:8000`):
 
 ```bash
-conda activate pcw
-python examples/quickstart.py
+make site                                  # build the JupyterLite site into _output/
+docker compose -f deploy/compose.yaml up   # serves :8000 (site) + :8081 (grpc-web) + :15002 (Spark)
 ```
 
-| Example | Shows |
-|---------|-------|
-| [`quickstart.py`](examples/quickstart.py) | `install()`, connect, `range`/`filter`, `toPandas` |
-| [`transformations.py`](examples/transformations.py) | `select`, `withColumn`, `filter`, `orderBy`, `functions` |
-| [`aggregations.py`](examples/aggregations.py) | `groupBy`/`agg`, `count`, `avg`, `sum` |
-| [`joins.py`](examples/joins.py) | inner/left/semi joins across DataFrames |
-| [`window.py`](examples/window.py) | `Window` partition/order, `row_number`, `rank`, running totals |
-| [`sql.py`](examples/sql.py) | temp views, `spark.sql(...)`, parameterized SQL |
-| [`io.py`](examples/io.py) | `createDataFrame`, `printSchema`, read/write Parquet/JSON |
+Open <http://localhost:8000/>, then in a notebook cell:
+
+```python
+import pyspark_connect_web as pcw
+pcw.install()
+
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.remote("sc://localhost:8081/;transport=grpcweb").getOrCreate()
+spark.range(10).filter("id % 2 = 0").toPandas()
+```
+
+GitHub Pages / other static hosts: see [JupyterLite hosting](docs/jupyterlite-hosting.md).
+
+### 2. Embed it in your own web page
+
+The site ships a small, self-contained page that boots Pyodide in a Web Worker,
+micropip-installs the wheel, runs `pcw.install()`, binds a `SparkSession`, and
+exposes `window.__pcwRunPython(src)`. Use
+[`pyspark_connect_web/jupyterlite/harness.html`](pyspark_connect_web/jupyterlite/harness.html)
+as the reference for wiring
+[`worker/worker_bootstrap.js`](pyspark_connect_web/worker/worker_bootstrap.js) +
+[`worker/bridge.js`](pyspark_connect_web/worker/bridge.js) into your app. The page
+must be cross-origin isolated (`COOP: same-origin`, `COEP: credentialless`) for the
+`SharedArrayBuffer` bridge.
+
+### 3. Run the end-to-end example
+
+The browser e2e brings up the whole stack and drives the v0 matrix
+(`range/collect`, `groupBy/agg` Arrow parity, `createDataFrame`, `spark.sql`) in
+real Chromium:
+
+```bash
+make site
+docker compose -f deploy/compose.yaml up -d
+cd tests/e2e && npm install && npx playwright install --with-deps chromium
+E2E_REQUIRE_STACK=1 npx playwright test          # full steps in tests/e2e/README.md
+```
+
+It also runs on every push - see [`.github/workflows/e2e.yml`](.github/workflows/e2e.yml).
+
+### DataFrame API examples
+
+Once connected it is ordinary PySpark. Runnable scripts live in
+[`examples/`](examples/) (`quickstart`, `transformations`, `aggregations`,
+`joins`, `window`, `sql`, `io`); they double as plain native-PySpark scripts
+against any Spark Connect server.
 
 ## Documentation
 
@@ -163,7 +225,7 @@ Full docs: <https://hyukjinkwon.github.io/pyspark-client-wasm/>
 
 The v0 target is full read-path parity - `range/select/filter/groupBy/agg`,
 `toPandas`, `createDataFrame`, and `spark.sql(...)` - returning results
-byte/row-exact versus a native Spark Connect run. See [`DECISIONS.md`](DECISIONS.md).
+byte/row-exact versus a native Spark Connect run. See the design notes.
 
 ## Development
 
@@ -177,7 +239,7 @@ Unit tests stub the transport: they **never import `grpcio`** and never touch a
 browser. `grpcio` is not available in Pyodide, so the package registers a
 lightweight gRPC shim (`pyspark_connect_web/_grpc_shim.py`) before PySpark is
 imported; CI fails if `grpcio` is imported anywhere under
-`pyspark_connect_web/` (DECISIONS.md #1).
+`pyspark_connect_web/`.
 
 Build the JupyterLite site (produces `_output/` served on `:8000`):
 
@@ -188,4 +250,4 @@ make site          # or: scripts/build_site.sh
 Browser end-to-end tests run under Playwright against the deploy stack; see
 [`docs/running-locally.md`](docs/running-locally.md). Contribution workflow and
 the lane/coordination model: [`CONTRIBUTING.md`](CONTRIBUTING.md) and
-[`COORDINATION.md`](COORDINATION.md).
+[`CONTRIBUTING.md`](CONTRIBUTING.md).

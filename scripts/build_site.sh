@@ -11,12 +11,12 @@
 #   scripts/build_site.sh                 # build wheel + lite site into _output
 #   PCW_OUTPUT_DIR=dist_site scripts/build_site.sh
 #
-# Pinned tool versions (see also team/findings-lane5-deploy.md):
+# Pinned tool versions:
 #   jupyterlite-core           ==0.6.4    (jupyter lite CLI)
 #   jupyterlite-pyodide-kernel ==0.6.1    (Pyodide kernel; Pyodide >=0.28/Py3.13)
 #   build                      ==1.2.2    (PEP 517 wheel build)
 # These pins must stay compatible with Pyodide >=0.28 / Python 3.13 in the
-# browser (COORDINATION.md). Bump deliberately, together.
+# browser (CONTRIBUTING.md). Bump deliberately, together.
 
 set -euo pipefail
 
@@ -76,7 +76,7 @@ log "copying _headers + wheel into $OUTPUT_DIR"
 cp "$LITE_DIR/_headers" "$OUTPUT_DIR/_headers"
 cp "$WHEEL" "$OUTPUT_DIR/"
 
-# --- 3b. wire lane 3's bridge JS into the site -----------------------------
+# --- 3b. wire the bridge JS into the site -----------------------------
 # Two of the three scripts SELF-INSTALL on load and must run BEFORE the
 # JupyterLite app reads `Worker` off the global scope:
 #   - coi-serviceworker.js  : registers a SW that injects COOP/COEP (header-less
@@ -89,7 +89,7 @@ cp "$WHEEL" "$OUTPUT_DIR/"
 #                             + the /jupyterlite/... site-root-absolute src).
 # run_python_bridge.js is copied for the e2e hook but is NOT auto-wired inside
 # JupyterLite (Shape B needs a live kernel connection - the remaining browser
-# integration item; see jupyterlite/README.md + team/findings-lane3-bridge.md).
+# integration item; see jupyterlite/README.md + the project notes).
 log "copying bridge JS assets into $OUTPUT_DIR (preserving module layout)"
 mkdir -p "$OUTPUT_DIR/jupyterlite" "$OUTPUT_DIR/worker"
 cp "$LITE_DIR"/pcw_kernel_bridge.js "$LITE_DIR"/run_python_bridge.js \
@@ -125,9 +125,9 @@ PY
 
 # --- 4. sanity checks (these must hold for the bridge to work) -------------
 grep -q 'Cross-Origin-Opener-Policy: same-origin' "$OUTPUT_DIR/_headers" \
-  || die "COOP missing from $OUTPUT_DIR/_headers (DECISIONS.md #4)"
+  || die "COOP missing from $OUTPUT_DIR/_headers"
 grep -q 'Cross-Origin-Embedder-Policy: credentialless' "$OUTPUT_DIR/_headers" \
-  || die "COEP missing from $OUTPUT_DIR/_headers (DECISIONS.md #4)"
+  || die "COEP missing from $OUTPUT_DIR/_headers"
 ls "$OUTPUT_DIR"/pyspark_connect_web-*.whl >/dev/null 2>&1 \
   || die "wheel not copied into $OUTPUT_DIR"
 [ -f "$OUTPUT_DIR/coi-serviceworker.js" ] && [ -f "$OUTPUT_DIR/jupyterlite/pcw_kernel_bridge.js" ] \

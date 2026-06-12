@@ -19,7 +19,7 @@ dependencies = []
 # local dev/test only; the browser gets these from Pyodide.
 # googleapis-common-protos is pure-Python and required by pyspark.sql.connect
 # (google.rpc.* protos); grpcio / grpcio-status are intentionally absent - the
-# _grpc_shim stubs them, mirroring Pyodide (DECISIONS.md #1).
+# _grpc_shim stubs them, mirroring Pyodide.
 dev = [
     "pyspark>=4.0,<4.2",
     "pyarrow>=22",

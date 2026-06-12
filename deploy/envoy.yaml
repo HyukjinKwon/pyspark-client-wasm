@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# Envoy config for pyspark-connect-web (lane 5).
+# Envoy config for pyspark-connect-web (the components).
 #
 # Two listeners:
 #   * :8081  grpc-web endpoint  -> Spark Connect gRPC server (upstream :15002)
 #            with the grpc_web filter + permissive CORS. This is what the
 #            browser client talks to: sc://localhost:8081/;transport=grpcweb
 #   * :8000  static file server for the JupyterLite site, serving the
-#            MANDATORY cross-origin-isolation headers (DECISIONS.md #4):
+#            MANDATORY cross-origin-isolation headers:
 #                Cross-Origin-Opener-Policy: same-origin
 #                Cross-Origin-Embedder-Policy: credentialless
 #            SharedArrayBuffer (the Atomics/SAB blocking bridge) refuses to
@@ -90,7 +90,7 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 
     # ---------------------------------------------------------------------
-    # static site host  (JupyterLite) with COOP/COEP - DECISIONS.md #4
+    # static site host  (JupyterLite) with COOP/COEP - 
     # ---------------------------------------------------------------------
     - name: static_listener
       address:

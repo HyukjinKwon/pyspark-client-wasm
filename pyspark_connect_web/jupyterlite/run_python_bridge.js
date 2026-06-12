@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// run_python_bridge.js - the `window.__pcwRunPython(src)` hook lane 5's e2e
+// run_python_bridge.js - the `window.__pcwRunPython(src)` hook the e2e
 // harness drives (see tests/e2e/helpers.ts). It runs a snippet of Python in the
 // Pyodide worker and resolves with the JSON-serialised result.
 //
@@ -12,7 +12,7 @@
 //   B. Inside JupyterLite: the kernel owns the worker and its own exec protocol.
 //      There, __pcwRunPython is implemented by dispatching a kernel execute
 //      request and reading the reply. That path is the open integration item in
-//      team/findings-lane3-bridge.md (#1) and is stubbed here with a clear throw
+//      the project notes (#1) and is stubbed here with a clear throw
 //      so the e2e harness surfaces "not wired" rather than hanging.
 //
 // The contract the e2e harness expects (helpers.ts):

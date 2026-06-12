@@ -38,13 +38,13 @@ Return `True` if the patch is currently installed.
 ### `set_stub_factory(factory: Optional[StubFactory]) -> None`
 
 Override the factory that builds the gRPC-service stub the patched client uses.
-Pass `None` to restore the default (the lane-1 grpc-web stub). Primarily a
+Pass `None` to restore the default (the grpc-web stub). Primarily a
 pluggable hook for wiring an alternate transport or injecting a fake in tests.
 
 ### `set_channel_factory(factory: Optional[ChannelFactory]) -> None`
 
 Override the factory that builds the [`SyncChannel`](#protocols-transport-seam)
-backing the stub. Pass `None` to restore the default (the lane-3 SAB bridge
+backing the stub. Pass `None` to restore the default (the SAB bridge
 channel). Used to inject a fake/loopback channel in tests and integration harnesses.
 
 ### `check_pyspark_version(version: Optional[str] = None) -> tuple[int, int]`
@@ -73,10 +73,10 @@ when the running PySpark is outside the supported range.
 ## Protocols (transport seam)
 
 These describe the seam the factories above plug into; see
-[Architecture](architecture.md) and `API_CONTRACT.md` for the full contract.
+[Architecture](architecture.md) and `the transport contract` for the full contract.
 
 - **`SyncChannel`** - a blocking byte transport with `unary(...)` and
-  `server_stream(...)` methods (implemented by the lane-3 SAB bridge in the
+  `server_stream(...)` methods (implemented by the SAB bridge in the
   browser, or by a loopback in tests).
 - **`StubFactory` / `ChannelFactory`** - callables that build the service stub
   and the `SyncChannel`, respectively.

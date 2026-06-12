@@ -9,9 +9,9 @@ PySpark's Connect client builds protobuf plans and calls a gRPC stub::
 We install :class:`GrpcWebStub` in place of that stub. It speaks the
 gRPC-Python *calling convention* - ``fn(request, *, metadata=None,
 timeout=None)`` - but the wire is **grpc-web over a blocking byte transport**
-(lane 3's ``SyncChannel``), never grpcio.
+(the ``SyncChannel``), never grpcio.
 
-Per the calling convention (API_CONTRACT.md section 1):
+Per the calling convention (the transport contract section 1):
   * server-streaming methods (``ExecutePlan``, ``ReattachExecute``) return an
     **iterator** of response protos;
   * unary methods return a single response proto;
@@ -41,7 +41,7 @@ from .._grpc_shim import install_grpc_shim as _install_grpc_shim
 _install_grpc_shim()
 
 # ``SparkConnectGrpcException`` moved between ``pyspark.errors`` and
-# ``pyspark.errors.exceptions.connect`` across versions. API_CONTRACT.md names
+# ``pyspark.errors.exceptions.connect`` across versions. the transport contract names
 # ``pyspark.errors``; import resiliently so we work across the pinned range
 # (pyspark>=4.0,<4.2) without forking anything.
 try:  # pragma: no cover - import shim, exercised indirectly
@@ -52,7 +52,7 @@ except Exception:  # pragma: no cover
     )
 
 # Protos. Imported lazily-but-once from the real pyspark package; we never
-# vendor copies (DECISIONS.md #2).
+# vendor copies.
 from pyspark.sql.connect import proto as _pb  # type: ignore
 
 import sys as _sys
@@ -66,7 +66,7 @@ def _transport_unavailable(message: str) -> Exception:
     (retries.py), and its reattachable iterator then issues a fresh ExecutePlan /
     ReattachExecute. We fetch ``grpc`` from ``sys.modules`` (the real grpcio, or
     our stub in Pyodide) WITHOUT a literal ``import grpc`` so the package's
-    no-grpcio guard (DECISIONS.md #1) still holds.
+    no-grpcio guard still holds.
     """
     grpc = _sys.modules.get("grpc")
     rpc_error_base = getattr(grpc, "RpcError", Exception) if grpc else Exception
@@ -88,7 +88,7 @@ def _transport_unavailable(message: str) -> Exception:
 
 Metadata = Sequence[Tuple[str, str]]
 
-# grpc-web required request headers (DECISIONS.md #1: no grpcio, fetch only).
+# grpc-web required request headers.
 _CONTENT_TYPE = "application/grpc-web+proto"
 _BASE_HEADERS = {
     "content-type": _CONTENT_TYPE,
@@ -156,8 +156,8 @@ def _raise_for_trailers(
 class GrpcWebStub:
     """Duck-typed replacement for ``SparkConnectServiceStub``.
 
-    Constructed with a lane-3 :class:`SyncChannel` and a base URL. Exposes the
-    10 service methods from API_CONTRACT.md section 1, each following the gRPC-Python
+    Constructed with a the :class:`SyncChannel` and a base URL. Exposes the
+    10 service methods from the transport contract section 1, each following the gRPC-Python
     calling convention ``fn(request, *, metadata=None, timeout=None)``.
     """
 
@@ -169,12 +169,12 @@ class GrpcWebStub:
         metadata: Optional[Metadata] = None,
         default_metadata: Optional[Metadata] = None,
     ) -> None:
-        # SEAM (lane1<->lane2): lane 2's patch._default_stub_factory constructs
+        # SEAM (the transport<->the transport): the patch._default_stub_factory constructs
         # us as ``GrpcWebStub(sync_channel, metadata=[...])`` where ``metadata``
         # is the channel-level (auth/UA) header pairs from ChannelBuilder. We
         # accept ``metadata`` as the canonical channel-default keyword, and keep
         # ``default_metadata`` as a backward-compatible alias. See
-        # team/findings-lane1-transport.md.
+        # the project notes.
         self._channel = channel
         # base_url is informational here: ``path`` is the gRPC path the
         # SyncChannel resolves against its own configured host. We keep it so a
@@ -322,7 +322,7 @@ class GrpcWebStub:
         metadata: Optional[Metadata],
         timeout: Optional[float],
     ) -> Any:
-        # CONTRACT NOTE (lane1): the SyncChannel seam (API_CONTRACT.md section 1) only
+        # CONTRACT NOTE (the transport): the SyncChannel seam (the transport contract section 1) only
         # defines unary() and server_stream() - there is no client-streaming
         # entry point. grpc-web itself has no true client streaming either; the
         # canonical lowering is to concatenate all request frames into one body
@@ -382,7 +382,7 @@ class GrpcWebStub:
         frames into protos, and on the trailer frame validate grpc-status,
         raising on a non-OK status.
 
-        **Dropped-stream recovery (DECISIONS.md #6).** A stream that ends with
+        **Dropped-stream recovery.** A stream that ends with
         *no trailer frame* (or with a trailing partial frame) is a broken
         connection mid-result. We must NOT raise here: PySpark's
         ``ExecutePlanResponseReattachableIterator`` only recovers a broken stream

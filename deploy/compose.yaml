@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# docker compose for pyspark-connect-web (lane 5).
+# docker compose for pyspark-connect-web (the components).
 #
 #   docker compose -f deploy/compose.yaml up
 #
 # Brings up three services:
 #   * spark-connect : a Spark 4.x Connect server (gRPC on :15002, internal only)
-#   * static        : serves the built JupyterLite site (lane 3 output) on :80,
+#   * static        : serves the built JupyterLite site (the output) on :80,
 #                     fronted by Envoy with COOP/COEP
 #   * envoy         : grpc-web proxy on :8081 + static host on :8000
 #
@@ -15,10 +15,10 @@
 # JupyterLite page (cross-origin isolated):
 #   http://localhost:8000/
 #
-# Version pins (see team/findings-lane5-deploy.md for the why + gotchas):
+# Version pins:
 #   * apache/spark:4.0.0          -> Spark 4.0.0, bundles Spark Connect server
 #   * envoyproxy/envoy:v1.31-latest
-#   * Pyodide >= 0.28 / Python 3.13 in the browser (provided by lane 3)
+#   * Pyodide >= 0.28 / Python 3.13 in the browser (provided by the components)
 #
 # NOTE: the Spark Connect *package* coordinate must match the Spark version.
 # For Spark 4.0.0 + Scala 2.13 that is:
@@ -70,7 +70,7 @@ services:
 
   static:
     # Tiny static file server for the built JupyterLite site. The site is
-    # produced by lane 3 (`jupyterlite build`) into ./_output; mount it here.
+    # produced by the (`jupyterlite build`) into ./_output; mount it here.
     # halverneus/static-file-server serves the dir on :8080 by default; we pin
     # the listen port to 80 to match envoy.yaml's static-site cluster.
     image: halverneus/static-file-server:v1.8.10

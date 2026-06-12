@@ -23,7 +23,7 @@ output <-> the JupyterLite DOM. Each section below: **threat -> impact -> mitiga
 **Why it matters.** The blocking `.collect()` bridge needs `SharedArrayBuffer` +
 `Atomics.wait`, which the browser only exposes when the page is **cross-origin
 isolated** (`Cross-Origin-Opener-Policy: same-origin` +
-`Cross-Origin-Embedder-Policy: require-corp`). DECISIONS.md #4 makes this a hard
+`Cross-Origin-Embedder-Policy: require-corp`).  makes this a hard
 invariant.
 
 **Threats.**
@@ -45,7 +45,7 @@ invariant.
 * Envoy sets COOP/COEP on the static host in **both** dev (`deploy/envoy.yaml`)
   and prod (`deploy/envoy.prod.yaml`); `scripts/validate_deploy.py` + the CI
   `headers-guard` fail the build if either drops them. The e2e suite asserts
-  `crossOriginIsolated === true` as the **first** gate (DECISIONS.md #4), so a
+  `crossOriginIsolated === true` as the **first** gate, so a
   stripped header is caught loud, not silent.
 * `worker_bootstrap.js` calls `assertIsolated()` and bails before allocating the
   SAB if isolation is off - fail-closed, never run on a non-isolated page.
@@ -64,7 +64,7 @@ server that has no auth, that is a confused-deputy / CSRF-style path straight to
 Spark: arbitrary plan execution against your cluster's data and compute.
 
 The dev config (`deploy/envoy.yaml`) intentionally uses wildcard CORS for laptop
-convenience - `team/findings-lane5-deploy.md` flags this. It is **not** safe past
+convenience - `the project notes` flags this. It is **not** safe past
 localhost.
 
 **Mitigations (prod - `deploy/envoy.prod.yaml`).**
@@ -119,8 +119,7 @@ compromised server (or a MITM if TLS is absent) can:
 
 * Return **crafted Arrow IPC bytes** to attack the decoder (`pyarrow`) - malformed
   buffers, huge declared sizes (memory-exhaustion / DoS), or schema tricks.
-* Return responses designed to drive the client into pathological reattach loops
-  (DECISIONS.md #6), or stream unboundedly to exhaust the tab's memory.
+* Return responses designed to drive the client into pathological reattach loops, or stream unboundedly to exhaust the tab's memory.
 * Send **error messages / column values** containing active content that later
   gets rendered (feeds into section 5, notebook-output XSS).
 
@@ -129,9 +128,9 @@ compromised server (or a MITM if TLS is absent) can:
 * **Authenticate the server, not just the client:** always TLS in prod so the
   client knows it is talking to the real endpoint (prevents MITM-injected
   responses). Pin the host; for high-assurance, certificate-pin.
-* **Decoder robustness:** lane 4 decodes via `pyarrow` (sandboxed inside WASM -
+* **Decoder robustness:** the decodes via `pyarrow` (sandboxed inside WASM -
   a decoder crash is contained to the tab, not the host). Treat all server bytes
-  as untrusted input; lane 4's reassembly validates `row_count`/chunk integrity
+  as untrusted input; the reassembly validates `row_count`/chunk integrity
   (SPARK-53525 handling) and should reject inconsistent batches rather than trust
   declared sizes. The 32 MiB per-connection buffer limit in `envoy.prod.yaml`
   bounds a single upload; result streams are bounded by the tab's own memory -

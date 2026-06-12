@@ -15,7 +15,7 @@ spark = SparkSession.builder.remote(REMOTE).getOrCreate()
 print("collect:", spark.range(10).collect())
 print("count:", spark.range(1000).filter("id % 7 = 0").count())
 
-# Arrow result -> pandas (the path lane 4 decodes in the browser).
+# Arrow result -> pandas (the path the decodes in the browser).
 print(spark.range(5).withColumnRenamed("id", "n").toPandas())
 
 spark.stop()

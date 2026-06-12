@@ -3,7 +3,7 @@
 """Static validation of the deploy/ configs - no Docker, no network.
 
 Checks that every Envoy/compose YAML parses, and that the mandatory
-cross-origin-isolation headers (DECISIONS.md #4) are present in BOTH the dev and
+cross-origin-isolation headers are present in BOTH the dev and
 prod Envoy configs. Also asserts the prod config did not regress into a wildcard
 CORS origin. Used by CI (the headers/deploy guard) and `make validate-deploy`.
 """
@@ -21,7 +21,7 @@ YAML_FILES = [
     "deploy/compose.prod.yaml",
 ]
 
-# Files that must carry COOP/COEP for SharedArrayBuffer (DECISIONS.md #4).
+# Files that must carry COOP/COEP for SharedArrayBuffer.
 COI_FILES = ["deploy/envoy.yaml", "deploy/envoy.prod.yaml"]
 
 
@@ -54,7 +54,7 @@ def main() -> int:
             "credentialless",
         ):
             if needle not in text:
-                print(f"FAIL coi-header   {f}: missing {needle!r} (DECISIONS.md #4)")
+                print(f"FAIL coi-header   {f}: missing {needle!r}")
                 failed = True
         if all(
             n in text
@@ -68,7 +68,7 @@ def main() -> int:
             print(f"OK   coi-headers  {f}")
 
     # Prod must NOT use a wildcard CORS origin (regex ".*"). Tightened CORS is a
-    # hard requirement for prod (lane 5 brief). The dev file may use ".*".
+    # hard requirement for prod (the brief). The dev file may use ".*".
     prod = open("deploy/envoy.prod.yaml", encoding="utf-8").read()
     if 'regex: ".*"' in prod:
         print("FAIL prod-cors    deploy/envoy.prod.yaml uses wildcard CORS regex '.*'")

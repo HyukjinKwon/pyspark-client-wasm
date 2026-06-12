@@ -7,18 +7,18 @@ NO browser, NO Docker, NO network beyond loopback. The path under test is::
         GrpcWebBridgeChannel (Envoy stand-in: decode frames, gRPC out,
         re-encode frames + trailer)  ->  real Spark Connect gRPC server
 
-This exercises lane 1's framing in BOTH directions, lane 2's patch/install, and
-lane 4's Arrow decode/encode, against a real engine. The bridge uses ``grpcio``
-purely as the downstream client (allowed in tests; the DECISIONS.md #1 ban is
+This exercises the framing in BOTH directions, the patch/install, and
+the Arrow decode/encode, against a real engine. The bridge uses ``grpcio``
+purely as the downstream client (allowed in tests; the  ban is
 scoped to ``pyspark_connect_web/`` only).
 
-Covers the DECISIONS.md "v0 done" matrix:
+Covers the v0 matrix matrix:
   * ``spark.range(10).collect()`` -> 10 rows
-  * groupBy/agg/toPandas EXACT parity vs the native Connect client (DECISIONS.md #7)
-  * ``createDataFrame(pandas_df)`` round-trips (lane 4 ``encode_local_relation``)
+  * groupBy/agg/toPandas EXACT parity vs the native Connect client
+  * ``createDataFrame(pandas_df)`` round-trips (the ``encode_local_relation``)
   * ``spark.sql("select 1 as x").collect()``
   * large multi-response streaming result (reattachable execute happy path)
-  * mid-stream disconnect recovers via ReattachExecute (DECISIONS.md #6)
+  * mid-stream disconnect recovers via ReattachExecute
 """
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ def _grouped_query(spark):
 
 
 def test_groupby_agg_topandas_parity_vs_native(web_spark, native_spark):
-    """DECISIONS.md #7: byte/row-exact parity vs a native Connect client on the
+    """: byte/row-exact parity vs a native Connect client on the
     same server."""
     web_pdf = _grouped_query(web_spark).toPandas()
     native_pdf = _grouped_query(native_spark).toPandas()
@@ -134,7 +134,7 @@ def test_groupby_agg_topandas_parity_vs_native(web_spark, native_spark):
 
 
 def test_create_dataframe_round_trips(web_spark):
-    """Exercises lane 4 ``encode_local_relation`` via createDataFrame."""
+    """Exercises the ``encode_local_relation`` via createDataFrame."""
     pdf = pd.DataFrame(
         {
             "a": [1, 2, 3],
@@ -158,7 +158,7 @@ def test_create_dataframe_parity_vs_native(web_spark, native_spark):
 
 def test_large_result_streams_multiple_responses(web_spark, native_spark):
     """A larger result streams as many ExecutePlanResponses (reattachable execute
-    happy path), reassembled by lane 1's chunk buffer + lane 4's Arrow decode."""
+    happy path), reassembled by the chunk buffer + the Arrow decode."""
     n = 200_000
     web_pdf = web_spark.range(n).select((F.col("id") * 2).alias("v")).toPandas()
     assert len(web_pdf) == n
@@ -173,10 +173,10 @@ def test_large_result_streams_multiple_responses(web_spark, native_spark):
 
 
 def test_midstream_disconnect_recovers_via_reattach(connect_server, installed_pcw):
-    """GUARD DECISIONS.md #6: a stream cut mid-result must recover via
+    """GUARD : a stream cut mid-result must recover via
     ReattachExecute and still return every row.
 
-    Regression guard for the bug fixed in ``transport/grpcweb.py``: lane 1 used to
+    Regression guard for the bug fixed in ``transport/grpcweb.py``: the used to
     *raise* ``SparkConnectGrpcException`` when a stream ended without a trailer.
     PySpark's reattachable iterator only recovers when the underlying iterator
     ends *cleanly* (StopIteration) before ResultComplete (its retry path only

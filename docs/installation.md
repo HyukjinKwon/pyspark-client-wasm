@@ -43,7 +43,7 @@ pip install "pyspark-connect-web[dev]"
 The `dev` extras pull in `pyspark>=4.0,<4.2`, `pyarrow>=22`, `pandas`,
 `protobuf>=7`, `googleapis-common-protos`, and `pytest`. Note that `grpcio` is
 intentionally **not** a dependency - the package never imports it, mirroring the
-Pyodide environment (see [Architecture](architecture.md) and `DECISIONS.md` #1).
+Pyodide environment (see [Architecture](architecture.md) and `the design notes` #1).
 
 !!! note "Why conda for the env but pip for the package?"
     The package is published to PyPI as a wheel, so `pip install` is the right
@@ -53,7 +53,7 @@ Pyodide environment (see [Architecture](architecture.md) and `DECISIONS.md` #1).
 
 ## Supported PySpark version
 
-`install()` is version-guarded to **`pyspark>=4.0,<4.2`** (`DECISIONS.md` #3). The
+`install()` is version-guarded to **`pyspark>=4.0,<4.2`** (`the design notes` #3). The
 patch depends on private internals of `SparkConnectClient` /
 `DefaultChannelBuilder` that are only pinned for that range; calling `install()`
 on an unsupported `pyspark` raises `UnsupportedPySparkError`.

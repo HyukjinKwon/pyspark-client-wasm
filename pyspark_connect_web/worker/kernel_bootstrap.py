@@ -51,7 +51,7 @@ def assert_kernel_ready() -> None:
     if not getattr(js, "crossOriginIsolated", False):
         raise TransportError(
             "Page is NOT cross-origin isolated, so SharedArrayBuffer/Atomics are "
-            "unavailable and the blocking bridge cannot work (DECISIONS.md #4).\n"
+            "unavailable and the blocking bridge cannot work.\n"
             "Fix by serving the JupyterLite site with:\n"
             "    Cross-Origin-Opener-Policy:   same-origin\n"
             "    Cross-Origin-Embedder-Policy: credentialless\n"

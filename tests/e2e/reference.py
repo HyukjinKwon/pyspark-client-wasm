@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Reference-result generator for the e2e harness (lane 5).
+"""Reference-result generator for the e2e harness (the components).
 
 Runs the SAME queries the browser e2e runs, but against a **native** PySpark
 Connect client (plain gRPC, not grpc-web), and writes the results to a JSON file
-the browser run compares against. This is the ground truth for DECISIONS.md #7
+the browser run compares against. This is the ground truth for 
 ("Arrow correctness over speed - byte/row-exact vs a reference run of the same
 query on plain PySpark Connect").
 
-IMPORTANT - grpcio scoping (DECISIONS.md #1):
+IMPORTANT - grpcio scoping:
     This file uses PySpark's normal Connect client, which imports ``grpcio``.
     That is allowed *here* because this file lives under ``tests/`` and is NOT
     part of the ``pyspark_connect_web/`` package. The CI grpcio-guard checks

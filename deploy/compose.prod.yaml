@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# PRODUCTION docker-compose OVERLAY for pyspark-connect-web (lane 5).
+# PRODUCTION docker-compose OVERLAY for pyspark-connect-web (the components).
 #
 # Use this as a compose override on top of the dev compose:
 #

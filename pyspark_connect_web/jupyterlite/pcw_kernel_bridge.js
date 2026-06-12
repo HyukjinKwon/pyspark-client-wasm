@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// pcw_kernel_bridge.js - PAGE-side integration of lane 3's blocking transport
+// pcw_kernel_bridge.js - PAGE-side integration of the blocking transport
 // into the JupyterLite pyodide kernel.
 //
 // Why this file exists

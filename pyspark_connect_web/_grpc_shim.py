@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """A minimal stand-in for the ``grpc`` module.
 
-``grpcio`` is a C-extension that does not exist in Pyodide (DECISIONS.md #1), yet
+``grpcio`` is a C-extension that does not exist in Pyodide, yet
 PySpark's ``pyspark.sql.connect`` stack does ``import grpc`` at module load
 (client core, error mapping, channel builder). Since we replace the gRPC stub
 and channel entirely (see ``patch.py``), real grpc is never *called* on our path
@@ -163,7 +163,7 @@ def install_grpc_shim() -> bool:
     if existing is not None:
         return bool(getattr(existing, "__pcw_shim__", False))
     # Detect real grpcio WITHOUT a literal `import grpc` (which the CI grpcio
-    # guard, and DECISIONS.md #1, forbid in this package). find_spec resolves to
+    # guard, and , forbid in this package). find_spec resolves to
     # None when grpcio is absent (Pyodide); never shadow a real install.
     try:
         real = importlib.util.find_spec("grpc") is not None

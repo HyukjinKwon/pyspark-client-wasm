@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Distribution name on PyPI: `pyspark-connect-web`. Import/package name:
 `pyspark_connect_web`. Both are pure-Python, `py3-none-any`, and (by invariant)
-carry **no** `grpcio` dependency - see DECISIONS.md #1.
+carry **no** `grpcio` dependency - .
 
 ## [Unreleased]
 
@@ -50,7 +50,7 @@ the DOCS agent - see docs/packaging-release.md for the longer-form checklist):
      dist/* + the site tarball attached.
   6. Post-release: smoke-test the published site (crossOriginIsolated === true,
      demo notebook end-to-end against a reachable Connect server); update the
-     README status; file a team/findings-* note for anything surprising.
+     README status; file a the project notes note for anything surprising.
 
 One-time setup (maintainer): register the repo as a trusted publisher on PyPI
 (and TestPyPI) for the `pypi`/`testpypi` GitHub Environments - no API token is
@@ -67,21 +67,19 @@ unchanged - no reimplementation, no local JVM, no Python backend.
 ### Added
 - **grpc-web transport** - a `fetch`-based grpc-web stub (length-prefixed
   framing, `0x80` trailer frame) that replaces *only* PySpark's Connect service
-  stub. We patch, we do not fork (DECISIONS.md #2). Implements
+  stub. We patch, we do not fork. Implements
   ExecutePlan / ReattachExecute / ReleaseExecute, so mid-stream disconnects
-  recover via reattach (DECISIONS.md #6).
+  recover via reattach.
 - **JupyterLite/Pyodide bridge** - a Web Worker + `Atomics`/`SharedArrayBuffer`
   channel that makes Connect calls *blocking*, so `.collect()` / `.toPandas()`
-  return synchronously and the public PySpark API stays unchanged
-  (DECISIONS.md #5). Page-side `Worker` wrapping wires the bridge into the
+  return synchronously and the public PySpark API stays unchanged. Page-side `Worker` wrapping wires the bridge into the
   JupyterLite Pyodide kernel without forking it; a COI service worker covers
   header-less hosts. Cross-origin isolation (COOP/COEP) is mandatory and
-  asserted (DECISIONS.md #4).
+  asserted.
 - **Arrow result decoding** - IPC reassembly to pandas, including SPARK-53525
   multi-chunk split-batch handling, byte/row-exact against a native Connect
-  reference (DECISIONS.md #7).
-- **`pcw.install()`** - idempotent, version-guarded to `pyspark>=4.0,<4.2`
-  (DECISIONS.md #3); raises a clear error outside the range. Accepts
+  reference.
+- **`pcw.install()`** - idempotent, version-guarded to `pyspark>=4.0,<4.2`; raises a clear error outside the range. Accepts
   `sc://host:port/;transport=grpcweb` plus `http(s)://` shorthand.
 - **Real Spark-Connect-verified Python vertical** - the full v0 read-path matrix
   (`range`, `select`/`filter`/`groupBy`/`agg`, `toPandas`, `createDataFrame`,
@@ -91,8 +89,7 @@ unchanged - no reimplementation, no local JVM, no Python backend.
 - **Deploy stack** - dev `docker compose` (Spark 4.0.0 Connect + Envoy grpc-web
   proxy + COOP/COEP static host) and a hardened prod overlay (TLS, exact-origin
   CORS, bearer-token gate, size limits, health/readiness).
-- **Pure-Python wheel** - `py3-none-any`, `dependencies = []`, **no `grpcio`**
-  (DECISIONS.md #1); CI guards the no-grpcio invariant at source, wheel-metadata,
+- **Pure-Python wheel** - `py3-none-any`, `dependencies = []`, **no `grpcio`**; CI guards the no-grpcio invariant at source, wheel-metadata,
   and import time.
 - **Packaging & release automation** - `python -m build` sdist + wheel, PyPI
   publish via OIDC trusted publishing on a `vX.Y.Z` tag, JupyterLite site built
@@ -104,7 +101,7 @@ unchanged - no reimplementation, no local JVM, no Python backend.
   result-decode side (no client config on a bare response iterable); the only
   known gap to byte-exact parity for timestamp/struct columns.
 - The package does not yet ship a PEP 561 `py.typed` marker (owned by the
-  package source lanes; tracked in COORDINATION.md / docs/packaging-release.md).
+  package source lanes; tracked in CONTRIBUTING.md / docs/packaging-release.md).
 - `AddArtifacts` is lowered to a single grpc-web `unary()` POST (grpc-web has no
   true client streaming); not exercised end-to-end yet.
 

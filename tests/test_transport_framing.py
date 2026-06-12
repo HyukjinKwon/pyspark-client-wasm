@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for grpc-web framing (lane 1). No network, no grpcio, no browser."""
+"""Unit tests for grpc-web framing (the components). No network, no grpcio, no browser."""
 from __future__ import annotations
 
 import struct

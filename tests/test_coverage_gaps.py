@@ -106,7 +106,7 @@ def _block_submodule(monkeypatch, modname: str):
 
 
 def test_default_channel_factory_raises_clear_error_without_lane3(monkeypatch):
-    """When lane 3's SabSyncChannel can't be imported, the *default* channel
+    """When the SabSyncChannel can't be imported, the *default* channel
     factory raises a clear deferred error (at connect time, not import time)."""
     _block_submodule(monkeypatch, "pyspark_connect_web.worker")
     ep = pcw_patch.WebEndpoint(host="h", port=1, secure=False)
@@ -115,7 +115,7 @@ def test_default_channel_factory_raises_clear_error_without_lane3(monkeypatch):
 
 
 def test_default_stub_factory_raises_clear_error_without_lane1(monkeypatch):
-    """When lane 1's GrpcWebStub can't be imported, the default stub factory
+    """When the GrpcWebStub can't be imported, the default stub factory
     raises a clear error."""
     _block_submodule(monkeypatch, "pyspark_connect_web.transport")
     web = pcw_patch.WebChannel(host="h", port=1, secure=False, channel=object())

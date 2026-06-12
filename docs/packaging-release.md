@@ -11,7 +11,7 @@ The distributable is a pure-Python wheel: `pyspark_connect_web-<version>-py3-non
 
 * **No compiled extensions** - it must import under Pyodide/WASM, so it is
   `py3-none-any` and depends on nothing native. In particular it does **not**
-  depend on `grpcio` (DECISIONS.md #1) - `dependencies = []` in `pyproject.toml`,
+  depend on `grpcio` - `dependencies = []` in `pyproject.toml`,
   and `pyspark`/`pyarrow`/`pandas`/`protobuf` come from the Pyodide environment.
 * The JS glue (`worker/*.js`, `jupyterlite/*`) ships inside the wheel as package
   data so the JupyterLite build can reference it.
@@ -31,8 +31,8 @@ as untyped. To publish the type information:
    pyspark_connect_web = ["py.typed", "worker/*.js", "jupyterlite/*"]
    ```
 
-`pyspark_connect_web/` is owned by lanes 1-4 / the integrator; lane 5 does not
-add the marker unilaterally. This is flagged in `COORDINATION.md` for the owner
+`pyspark_connect_web/` is owned by the components / the integrator; the does not
+add the marker unilaterally. This is flagged in `CONTRIBUTING.md` for the owner
 to land. (Without it, the JS/notebook package data above should still be
 declared so the wheel is complete - confirm with the integrator.)
 
@@ -75,7 +75,7 @@ await micropip.install("https://<your-lite-origin>/pyspark_connect_web-<version>
 output root so it is served from the same (cross-origin-isolated) origin as the
 page - important under COEP `require-corp` (a cross-origin CDN wheel must send
 `Cross-Origin-Resource-Policy` or the import is blocked; see
-`team/findings-lane5-deploy.md` gotcha #5). `worker_bootstrap.js` reads the wheel
+`the project notes` gotcha #5). `worker_bootstrap.js` reads the wheel
 URL from `self.PCW_WHEEL_URL` (default: the wheel served at the site root).
 
 Then, in a notebook cell:
@@ -91,8 +91,8 @@ spark = SparkSession.builder.remote("sc://<host>:8081/;transport=grpcweb").getOr
 
 | Thing | Pin | Why |
 |-------|-----|-----|
-| `pyspark` (browser + dev) | `>=4.0,<4.2` | DECISIONS.md #3 - reattachable execute present; `install()` raises outside the range |
-| Pyodide | `>=0.28` / Python 3.13 | COORDINATION.md; provides `pyarrow>=22`, `pandas`, `numpy`, `protobuf>=7` |
+| `pyspark` (browser + dev) | `>=4.0,<4.2` |  - reattachable execute present; `install()` raises outside the range |
+| Pyodide | `>=0.28` / Python 3.13 | CONTRIBUTING.md; provides `pyarrow>=22`, `pandas`, `numpy`, `protobuf>=7` |
 | `build` | `==1.2.2` | wheel build (`scripts/build_site.sh`, Makefile) |
 | `jupyterlite-core` | `==0.6.4` | `jupyter lite` CLI (`scripts/build_site.sh`) |
 | `jupyterlite-pyodide-kernel` | `==0.6.1` | Pyodide kernel for the lite site |
@@ -112,7 +112,7 @@ Pre-release:
 - [ ] `make wheel` + the wheel-import / no-grpcio check above pass.
 - [ ] `make site` builds `_output` with the wheel + `_headers` present.
 - [ ] e2e against a live stack: `E2E_REQUIRE_STACK=1 make e2e` green (the full
-      DECISIONS.md v0 matrix). Skip-only runs do **not** count as a release gate.
+      the design notes v0 matrix). Skip-only runs do **not** count as a release gate.
 
 Publish:
 
@@ -128,4 +128,4 @@ Publish:
 Post-release:
 
 - [ ] Update `README.md` status if the milestone changed.
-- [ ] File a `team/findings-*` note for anything that surprised you.
+- [ ] File a `the project notes note for anything that surprised you.

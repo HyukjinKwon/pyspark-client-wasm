@@ -5,11 +5,11 @@ This package owns everything that turns Spark Connect ``arrow_batch`` chunks int
 a pandas ``DataFrame`` (result side) and a pandas ``DataFrame`` into the Arrow IPC
 stream bytes that ``createDataFrame`` / ``LocalRelation`` carries (request side).
 
-It deliberately does NOT touch the gRPC stub (lane 1), the monkey-patch (lane 2),
-or the sync bridge (lane 3). It only consumes the response protos those lanes
+It deliberately does NOT touch the gRPC stub (the components), the monkey-patch (the components),
+or the sync bridge (the components). It only consumes the response protos those lanes
 produce. It never imports ``grpcio``.
 
-See ``team/findings-lane4-arrow.md`` for the reuse-vs-reimplement investigation
+See ``the project notes`` for the reuse-vs-reimplement investigation
 and the SPARK-53525 chunking notes.
 """
 from __future__ import annotations

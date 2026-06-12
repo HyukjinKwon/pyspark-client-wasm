@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# Makefile for pyspark-connect-web (lane 5 owns packaging/release entrypoints).
+# Makefile for pyspark-connect-web (the owns packaging/release entrypoints).
 # Thin wrappers over the scripts; `make help` lists targets.
 
 SHELL := /usr/bin/env bash

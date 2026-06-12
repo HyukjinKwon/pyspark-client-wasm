@@ -3,7 +3,7 @@
 
 In production the path is::
 
-    GrpcWebStub (lane1)  -- grpc-web frames -->  Envoy grpc_web filter  -- gRPC -->  Spark Connect
+    GrpcWebStub (the transport)  -- grpc-web frames -->  Envoy grpc_web filter  -- gRPC -->  Spark Connect
 
 Envoy is a C++ proxy that translates the grpc-web wire format (length-prefixed
 frames over HTTP, trailers carried in a final ``0x80`` frame) into real HTTP/2
@@ -11,12 +11,12 @@ gRPC and back. There is no Envoy in this hermetic test, so this module reproduce
 exactly that translation in Python, using ``grpcio`` purely as the downstream
 gRPC client (allowed in tests).
 
-``GrpcWebBridgeChannel`` implements lane 3's :class:`SyncChannel` protocol
+``GrpcWebBridgeChannel`` implements the :class:`SyncChannel` protocol
 (``unary`` / ``server_stream``) so it drops straight into
 ``pcw.set_channel_factory(...)``. For each call it:
 
 1. Receives the grpc-web framed ``body`` produced by ``GrpcWebStub`` and decodes
-   the data frames using lane 1's *own* ``transport/framing`` (real framing in).
+   the data frames using the *own* ``transport/framing`` (real framing in).
 2. Translates the grpc-web HTTP headers into gRPC metadata and forwards the raw
    proto bytes to the real Connect server over ``grpcio`` with byte-passthrough
    (de)serializers.
@@ -24,13 +24,13 @@ gRPC client (allowed in tests).
    ``0x80`` trailer frame carrying ``grpc-status`` / ``grpc-message`` - exactly
    what ``GrpcWebStub`` expects back from Envoy (real framing out).
 
-This exercises lane 1's framing in BOTH directions against a real server.
+This exercises the framing in BOTH directions against a real server.
 """
 from __future__ import annotations
 
 from typing import Dict, Iterator, List, Optional, Tuple
 
-import grpc  # allowed in tests only (DECISIONS.md #1 is scoped to the package)
+import grpc  # allowed in tests only
 
 from pyspark_connect_web._contract import HttpResponse
 from pyspark_connect_web.transport.framing import (
@@ -149,7 +149,7 @@ class GrpcWebBridgeChannel:
 
         Each downstream message becomes a data frame chunk; the stream's final
         gRPC status becomes a trailer frame chunk. This mirrors how Envoy streams
-        grpc-web bytes "as they arrive off the wire" (lane 3 contract).
+        grpc-web bytes "as they arrive off the wire" (the contract).
         """
         call = callable_(request_bytes, metadata=metadata, timeout=timeout)
         try:
@@ -165,7 +165,7 @@ class GrpcWebBridgeChannel:
     def _single_request_bytes(path: str, body: bytes) -> bytes:
         """Decode the grpc-web request body to the single inner proto's bytes.
 
-        Uses lane 1's real ``iter_frames`` so we exercise its framing on the
+        Uses the real ``iter_frames`` so we exercise its framing on the
         request side too. PySpark always sends exactly one request message per
         unary/server-stream call; AddArtifacts (client-stream) is lowered by the
         stub to a concatenation of frames, which we reject loudly here because the

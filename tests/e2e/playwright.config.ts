@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Playwright config for the pyspark-connect-web e2e harness (lane 5).
+// Playwright config for the pyspark-connect-web e2e harness (the components).
 //
-// The JupyterLite page requires cross-origin isolation (COOP/COEP, DECISIONS.md
+// The JupyterLite page requires cross-origin isolation (COOP/COEP, the design notes
 // #4) so that SharedArrayBuffer is available to the Atomics/SAB blocking bridge.
 // Chromium honours those headers from the server (Envoy static host) and exposes
 // `crossOriginIsolated` - the first checklist assertion. No special launch flag

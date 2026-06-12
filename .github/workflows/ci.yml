@@ -1,21 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# CI for pyspark-connect-web (lane 5 owns this).
+# CI for pyspark-connect-web (the owns this).
 #
 # Jobs:
 #   * unit          - pytest across a Python matrix (transport stubbed; no
 #                     browser, no grpcio)
 #   * lint          - ruff check + format --check
 #   * grpcio-guard  - fails if grpcio is imported anywhere under
-#                     pyspark_connect_web/ (DECISIONS.md #1), package-scoped
+#                     pyspark_connect_web/, package-scoped
 #   * headers-guard - fails if deploy config drops the mandatory COOP/COEP
 #                     headers, or if prod CORS regresses to a wildcard
-#                     (DECISIONS.md #4); runs scripts/validate_deploy.py
+#; runs scripts/validate_deploy.py
 #   * build-wheel   - builds the wheel and asserts it imports + carries no
 #                     grpcio dependency
 #
 # The e2e job is intentionally NOT a required gate yet: the browser stack
-# (lanes 1-4 + JupyterLite build) is not runnable in CI, so e2e would skip. A
+# (the components + JupyterLite build) is not runnable in CI, so e2e would skip. A
 # commented sketch is included at the bottom to flip on once the stack lands.
 
 name: ci
@@ -70,7 +70,7 @@ jobs:
         # The integration harness starts a real Connect server and uses a
         # pure-Python grpc-web<->gRPC bridge that DOES need real grpcio +
         # grpcio-status - these live only in tests/ (the Envoy stand-in), which
-        # is outside the package, so DECISIONS.md #1 (no grpcio in the package)
+        # is outside the package, so  (no grpcio in the package)
         # still holds. The bundled Spark Connect jar means no extra download.
         run: |
           python -m pip install --upgrade pip
@@ -89,9 +89,9 @@ jobs:
           python-version: "3.11"
       - name: install ruff
         run: pip install ruff==0.6.9
-      # Scoped to lane-5-owned Python (scripts/ + the e2e reference generator).
+      # Scoped to the transport-owned Python (scripts/ + the e2e reference generator).
       # Whole-repo lint is intentionally NOT enabled yet: pyspark_connect_web/
-      # (lanes 1-4) has a couple of pre-existing ruff findings that lane 5 does
+      # (the components) has a couple of pre-existing ruff findings that the does
       # not own and must not edit. Flip the paths to `.` once those are clean and
       # the integrator lands a [tool.ruff] config in pyproject.toml.
       - name: ruff check
@@ -100,7 +100,7 @@ jobs:
         run: ruff format --check scripts/ tests/e2e/reference.py
 
   grpcio-guard:
-    name: no grpcio under pyspark_connect_web/ (DECISIONS.md #1)
+    name: no grpcio under pyspark_connect_web/
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -112,13 +112,13 @@ jobs:
           # (e.g. the native reference generator) are allowed to use grpcio.
           if grep -rnE '^[[:space:]]*(import[[:space:]]+grpc(io)?\b|from[[:space:]]+grpc(io)?[._[:space:]])' \
                pyspark_connect_web/ ; then
-            echo "::error::grpcio/grpc imported inside pyspark_connect_web/ - forbidden (DECISIONS.md #1)."
+            echo "::error::grpcio/grpc imported inside pyspark_connect_web/ - forbidden."
             exit 1
           fi
           echo "OK: no grpcio imports in pyspark_connect_web/"
 
   headers-guard:
-    name: COOP/COEP + tight prod CORS in deploy config (DECISIONS.md #4)
+    name: COOP/COEP + tight prod CORS in deploy config
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -166,11 +166,11 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # e2e (DISABLED until the browser stack lands). Uncomment + set
-  # E2E_REQUIRE_STACK=1 once lanes 1-4 + the JupyterLite build are runnable.
-  # With the bridge wired, this asserts the full DECISIONS.md "v0 done =" matrix.
+  # E2E_REQUIRE_STACK=1 once the components + the JupyterLite build are runnable.
+  # With the bridge wired, this asserts the full the v0 matrix matrix.
   # ---------------------------------------------------------------------------
   # e2e:
-  #   name: headless-browser e2e (DECISIONS.md "v0 done =")
+  #   name: headless-browser e2e
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v4

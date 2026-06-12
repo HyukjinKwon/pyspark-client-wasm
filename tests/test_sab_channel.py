@@ -159,8 +159,8 @@ def test_server_stream_yields_chunks_in_order():
 
 
 def test_server_stream_is_lazy_generator():
-    # The channel must not buffer the whole stream up front: lane 1 needs chunks
-    # as they arrive so a mid-stream disconnect (DECISIONS.md #6) is prompt.
+    # The channel must not buffer the whole stream up front: the needs chunks
+    # as they arrive so a mid-stream disconnect is prompt.
     consumed = []
 
     class Recording(FakeBackend):
@@ -180,7 +180,7 @@ def test_server_stream_is_lazy_generator():
 
 def test_server_stream_mid_stream_error_surfaces():
     # Two good chunks then a transport failure - the consumer sees the first two
-    # then the exception, modelling a broken stream that lane 1 recovers via
+    # then the exception, modelling a broken stream that the recovers via
     # ReattachExecute.
     backend = FakeBackend(stream_chunks=[b"a", b"b", b"c"], stream_error_after=2)
     ch = SabSyncChannel(BASE, backend=backend)

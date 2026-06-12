@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Lane 2: the monkey-patch that retargets PySpark Connect at a grpc-web transport.
 
-The whole project hangs off one idea (see ``/API_CONTRACT.md``): PySpark's
+The whole project hangs off one idea (see ``/the transport contract``): PySpark's
 Connect client is pure Python above a gRPC *stub*. We replace only that stub
 (and teach the connection parser a web scheme); nothing upstream of the stub
 -- DataFrame, Column, functions, plan building, the reattachable iterator --
-is touched. We **patch, we do not fork** (``DECISIONS.md`` #2).
+is touched. We **patch, we do not fork** (``the design notes`` #2).
 
 What ``install()`` does, in order:
 
-1. **Version-guard** the running ``pyspark`` to the range in ``DECISIONS.md`` #3
+1. **Version-guard** the running ``pyspark`` to the range in ``the design notes`` #3
    (``>=4.0,<4.2``) and raise a clear error otherwise. The seam we patch is
    private (``DefaultChannelBuilder.toChannel``,
    ``base_pb2_grpc.SparkConnectServiceStub`` construction); the guard is what
@@ -23,19 +23,19 @@ What ``install()`` does, in order:
 
 3. **Swap the channel + stub.** We wrap ``DefaultChannelBuilder.toChannel`` so
    that, for a web endpoint, it returns a lightweight :class:`WebChannel`
-   marker (carrying host/port/secure + a lane-3 ``SyncChannel``) instead of
+   marker (carrying host/port/secure + a the ``SyncChannel``) instead of
    calling ``grpc.*`` (which would import ``grpcio`` -- forbidden, ``DECISIONS``
    #1). We then replace ``base_pb2_grpc.SparkConnectServiceStub`` with a
-   factory that, given a ``WebChannel``, returns lane 1's ``GrpcWebStub`` and,
+   factory that, given a ``WebChannel``, returns the ``GrpcWebStub`` and,
    given anything else, falls back to the original stub. Both
    ``SparkConnectClient.__init__`` and ``ArtifactManager.__init__`` construct
    the stub via ``grpc_lib.SparkConnectServiceStub(channel)`` where
    ``grpc_lib`` is the *module* ``base_pb2_grpc`` -- so patching that one
    attribute covers both call sites.
 
-The lane-1 stub factory and the lane-3 channel factory are **pluggable hooks**
+The the stub factory and the channel factory are **pluggable hooks**
 (:func:`set_stub_factory`, :func:`set_channel_factory`) with lazy-importing
-defaults, so this module has no hard import cycle with lanes 1/3 and stays
+defaults, so this module has no hard import cycle with the components and stays
 importable even before they land.
 """
 from __future__ import annotations
@@ -49,7 +49,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from ._contract import SyncChannel
 
 # ---------------------------------------------------------------------------
-# Supported pyspark range (mirrors DECISIONS.md #3). Inclusive lower, exclusive
+# Supported pyspark range (mirrors ). Inclusive lower, exclusive
 # upper, by (major, minor).
 # ---------------------------------------------------------------------------
 SUPPORTED_PYSPARK_MIN: Tuple[int, int] = (4, 0)
@@ -120,7 +120,7 @@ class WebChannel:
     """Lightweight stand-in for ``grpc.Channel`` for the grpc-web transport.
 
     Carries everything the stub factory needs to reach the server. ``channel``
-    is lane 3's blocking :class:`SyncChannel`; ``metadata`` is the list of
+    is the blocking :class:`SyncChannel`; ``metadata`` is the list of
     ``(key, value)`` header pairs PySpark's ``ChannelBuilder.metadata()`` would
     inject (the stub forwards per-call metadata, but the channel-level pairs
     such as auth headers live here too).
@@ -154,11 +154,11 @@ class WebChannel:
 
 
 # ---------------------------------------------------------------------------
-# Pluggable hooks (lane 3 channel + lane 1 stub). Defaults lazily import the
+# Pluggable hooks (the channel + the stub). Defaults lazily import the
 # sibling lanes so this module has no import cycle and stays importable before
-# lanes 1/3 land.
+# the components land.
 # ---------------------------------------------------------------------------
-# A channel factory turns a parsed endpoint into a lane-3 SyncChannel.
+# A channel factory turns a parsed endpoint into a the SyncChannel.
 ChannelFactory = Callable[["WebEndpoint"], SyncChannel]
 # A stub factory turns a WebChannel into a duck-typed SparkConnectServiceStub.
 StubFactory = Callable[[WebChannel], Any]
@@ -183,7 +183,7 @@ class WebEndpoint:
 
 
 def set_channel_factory(factory: Optional[ChannelFactory]) -> None:
-    """Override the lane-3 ``SyncChannel`` factory (e.g. inject a fake in tests).
+    """Override the ``SyncChannel`` factory (e.g. inject a fake in tests).
 
     Pass ``None`` to restore the lazy default.
     """
@@ -192,7 +192,7 @@ def set_channel_factory(factory: Optional[ChannelFactory]) -> None:
 
 
 def set_stub_factory(factory: Optional[StubFactory]) -> None:
-    """Override the lane-1 stub factory (e.g. inject a fake in tests).
+    """Override the stub factory (e.g. inject a fake in tests).
 
     Pass ``None`` to restore the lazy default.
     """
@@ -201,19 +201,18 @@ def set_stub_factory(factory: Optional[StubFactory]) -> None:
 
 
 def _default_channel_factory(endpoint: WebEndpoint) -> SyncChannel:
-    """Lazily build lane 3's blocking ``SyncChannel`` for ``endpoint``.
+    """Lazily build the blocking ``SyncChannel`` for ``endpoint``.
 
-    Imported lazily to avoid a hard cycle with lane 3 and to keep ``install()``
-    importable before lane 3 lands. Raises a clear, deferred error if lane 3's
-    channel is not available at *connect* time (not at install time).
+    Imported lazily to avoid a hard cycle with the and to keep ``install()``
+    importable before the lands. Raises a clear, deferred error if the channel is not available at *connect* time (not at install time).
     """
     try:
         from .worker import SabSyncChannel
-    except Exception as e:  # lane 3 not present yet
+    except Exception as e:  # the not present yet
         raise RuntimeError(
             "pyspark-connect-web: no SyncChannel available. The default "
-            "transport is lane 3's worker.SabSyncChannel, which is not "
-            "importable here. Install lane 3, run in Pyodide, or inject one via "
+            "transport is the worker.SabSyncChannel, which is not "
+            "importable here. Install the components, run in Pyodide, or inject one via "
             "pyspark_connect_web.patch.set_channel_factory(...)."
         ) from e
     # Lane 3 owns the exact constructor; we pass the base URL it needs to fetch.
@@ -221,17 +220,17 @@ def _default_channel_factory(endpoint: WebEndpoint) -> SyncChannel:
 
 
 def _default_stub_factory(channel: WebChannel) -> Any:
-    """Lazily build lane 1's ``GrpcWebStub`` over the channel's ``SyncChannel``.
+    """Lazily build the ``GrpcWebStub`` over the channel's ``SyncChannel``.
 
     The exact call shape -- ``GrpcWebStub(sync_channel, metadata=...)`` -- is
-    documented in ``team/findings-lane2-patch.md`` so lane 1 conforms.
+    documented in ``the project notes`` so the conforms.
     """
     try:
         from .transport import GrpcWebStub
-    except Exception as e:  # lane 1 not present yet
+    except Exception as e:  # the not present yet
         raise RuntimeError(
-            "pyspark-connect-web: lane 1's transport.GrpcWebStub is not "
-            "importable. Install lane 1 or inject a stub via "
+            "pyspark-connect-web: the transport.GrpcWebStub is not "
+            "importable. Install the or inject a stub via "
             "pyspark_connect_web.patch.set_stub_factory(...)."
         ) from e
     return GrpcWebStub(channel.channel, metadata=list(channel.params.items()))  # type: ignore[call-arg]
@@ -397,7 +396,7 @@ def install() -> None:
                 params=meta,
             )
 
-        # (d) stub factory: WebChannel -> lane 1 stub; anything else -> original.
+        # (d) stub factory: WebChannel -> the stub; anything else -> original.
         def patched_stub_factory(channel: Any, *args: Any, **kwargs: Any) -> Any:
             if isinstance(channel, WebChannel):
                 return _get_stub_factory()(channel)

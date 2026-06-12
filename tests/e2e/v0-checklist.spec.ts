@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// e2e: the DECISIONS.md "v0 done =" checklist, in a real headless browser.
+// e2e: the v0 matrix checklist, in a real headless browser.
 //
 // These tests drive the standalone harness (pyspark_connect_web/jupyterlite/
 // harness.html) which boots Pyodide in a Web Worker, micropip-installs pyspark
 // + the wheel, runs pcw.install(), binds a SparkSession over grpc-web, and
-// exposes window.__pcwRunPython(src). We assert the v0 matrix from DECISIONS.md.
+// exposes window.__pcwRunPython(src). We assert the v0 matrix from the design notes.
 //
 // SINGLE BOOT: Pyodide cold start (loadPackage pyarrow/pandas + micropip
 // pyspark) is ~60-90s, so we boot ONCE in beforeAll on a shared page and run
 // all checks against it (serial mode). Re-booting per test was ~5x slower and
 // spammed the logs.
 //
-// Mapping to DECISIONS.md "v0 done =":
+// Mapping to the v0 matrix:
 //   1. crossOriginIsolated === true                          (#4)
 //   2. spark.range(10).collect() == 10 rows
 //   3. filter/select/groupBy/agg toPandas == native reference (#7 Arrow parity)
@@ -124,7 +124,7 @@ test("spark.range(10).collect() returns 10 rows", async ({}, testInfo) => {
 
 // ---------------------------------------------------------------------------
 // 3. filter/select/groupBy/agg toPandas matches the native reference
-//    (DECISIONS.md #7). MUST match tests/e2e/reference.py::build_reference.
+//. MUST match tests/e2e/reference.py::build_reference.
 // ---------------------------------------------------------------------------
 test("filter/groupBy/agg toPandas matches reference", async ({}, testInfo) => {
   if (!skipUnlessBridge(testInfo)) return;
@@ -182,7 +182,7 @@ test("spark.sql round-trips", async ({}, testInfo) => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. mid-stream disconnect recovers via ReattachExecute (DECISIONS.md #6)
+// 6. mid-stream disconnect recovers via ReattachExecute
 //
 // FIXME / KNOWN LIMITATION (not a regression): this browser test aborts the
 // INITIAL ExecutePlan at the network layer, so no operation ever starts on the

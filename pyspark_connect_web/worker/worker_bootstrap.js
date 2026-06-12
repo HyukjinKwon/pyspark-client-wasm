@@ -13,7 +13,7 @@
 //
 // This file is the worker entry: `new Worker("worker_bootstrap.js", {type:"module"})`.
 // The page must be cross-origin isolated (COOP/COEP) or SharedArrayBuffer is
-// undefined and we bail early - see DECISIONS.md #4.
+// undefined and we bail early - .
 
 "use strict";
 
@@ -63,7 +63,7 @@ function assertIsolated() {
   if (typeof SharedArrayBuffer === "undefined" || self.crossOriginIsolated !== true) {
     throw new Error(
       "Not cross-origin isolated: SharedArrayBuffer is unavailable. Serve the " +
-        "page with COOP: same-origin and COEP: credentialless (DECISIONS.md #4)."
+        "page with COOP: same-origin and COEP: credentialless."
     );
   }
 }
@@ -144,4 +144,4 @@ self.addEventListener("message", async (ev) => {
 // STATE and Atomics.notify-ing. The worker thread, parked in Python on
 // Atomics.wait(ctrl, C_STATE, S_REQ_READY), wakes and reads the bytes. The
 // worker never yields its thread to the event loop during a blocking RPC - that
-// is exactly what keeps PySpark's .collect() synchronous (DECISIONS.md #5).
+// is exactly what keeps PySpark's .collect() synchronous.

@@ -2,9 +2,9 @@
 
 # tests/e2e - headless-browser end-to-end harness
 
-This is lane 5's e2e harness. It drives a real headless browser against the
+This is the e2e harness. It drives a real headless browser against the
 JupyterLite page served by `deploy/` and asserts the **"v0 done ="** checklist
-from `DECISIONS.md`:
+from `the design notes`:
 
 - [ ] `crossOriginIsolated === true` on the JupyterLite page
 - [ ] `spark.range(10).collect()` returns 10 rows
@@ -15,17 +15,16 @@ from `DECISIONS.md`:
 
 ## Status: WIRED (gated)
 
-Every checklist item is a real Playwright test that drives lane 3's
-`window.__pcwRunPython(src)` bridge
+Every checklist item is a real Playwright test that drives the `window.__pcwRunPython(src)` bridge
 (`pyspark_connect_web/jupyterlite/run_python_bridge.js`) and asserts the
-DECISIONS.md v0 matrix. There are **no more `test.fixme` markers** - instead the
+the design notes v0 matrix. There are **no more `test.fixme` markers** - instead the
 suite degrades gracefully on two axes:
 
 1. **Stack down** (JupyterLite page unreachable at `E2E_BASE_URL`): every test
    skips, unless `E2E_REQUIRE_STACK=1` (then it is a hard failure - the CI gate
    to flip once the stack lands).
 2. **Bridge not wired** (page is up but `window.__pcwRunPython` is absent, e.g.
-   the JupyterLite-kernel integration in `team/findings-lane3-bridge.md` #1 is
+   the JupyterLite-kernel integration in `the project notes` #1 is
    still pending): the bridge-dependent tests skip with a clear reason, again
    unless `E2E_REQUIRE_STACK=1`. The `crossOriginIsolated` test needs no bridge
    and runs whenever the page is up.
@@ -33,7 +32,7 @@ suite degrades gracefully on two axes:
 The query in test #3 (filter/groupBy/agg) is kept **byte-for-byte** in lockstep
 with `reference.py::build_reference`.
 
-The mid-stream-disconnect test (DECISIONS.md #6) arms a one-shot Playwright
+The mid-stream-disconnect test arms a one-shot Playwright
 `page.route()` that aborts the first `ExecutePlan` POST after it starts; the
 client's reattachable iterator must recover via `ReattachExecute` (a path we do
 **not** intercept) and still return the full count.
@@ -43,7 +42,7 @@ client's reattachable iterator must recover via `ReattachExecute` (a path we do
 | File | Purpose |
 |------|---------|
 | `playwright.config.ts` | Playwright config; reads `E2E_BASE_URL` (default `http://localhost:8000`) |
-| `v0-checklist.spec.ts` | One test per DECISIONS.md checklist item, driving the bridge |
+| `v0-checklist.spec.ts` | One test per the design notes checklist item, driving the bridge |
 | `helpers.ts` | Shared helpers: stack-up probe, bridge probe, kernel-ready wait, run-cell, mid-stream-disconnect injector |
 | `reference.py` | Reference-result generator - runs the same queries on a **native** Spark Connect client and writes `reference.json` for the browser run to compare against |
 | `package.json` | npm deps (`@playwright/test`) + scripts |
@@ -67,8 +66,7 @@ pip install -e ".[dev]"   # pyspark + pyarrow + pandas (NO grpcio; native gRPC c
 > NOTE: the *native* reference client (`reference.py`) runs a normal PySpark
 > Connect session against `sc://localhost:15002`. PySpark Connect's own client
 > uses `grpcio` - that is fine **here** because `reference.py` lives under
-> `tests/` and is NOT part of `pyspark_connect_web/` (DECISIONS.md #1 forbids
-> `grpcio` only inside the package). The CI grpcio-guard scopes its check to
+> `tests/` and is NOT part of `pyspark_connect_web/`. The CI grpcio-guard scopes its check to
 > `pyspark_connect_web/` exactly for this reason. If your dev env lacks
 > `grpcio`, generate the reference on a machine that has it and commit the
 > `reference.json`.

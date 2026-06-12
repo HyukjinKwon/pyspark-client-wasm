@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
 """Coverage-gap + parity tests for ``pyspark_connect_web.arrow.results``.
 
-Complements ``tests/test_arrow_results.py`` (owned by lane 4) without rewriting
+Complements ``tests/test_arrow_results.py`` (owned by the components) without rewriting
 it. Targets the branches that suite leaves uncovered and pins the
 type-parity behaviour flagged as the known boundary in
-``team/findings-lane4-arrow.md`` / ``team/findings-integration.md``:
+``the project notes`` / ``the project notes``:
 
   * first-chunk ``chunk_index != 0`` rejection,
   * empty-result-with-known-schema (named empty DataFrame) branch,
   * the pyarrow-version probe fallback,
   * timezone / struct / decimal / nested type-fidelity *pins* against pyarrow's
     own ``to_pandas`` (the documented decoder contract), and an explicit
-    ``xfail`` recording the one genuine parity gap: lane 4 applies NO
+    ``xfail`` recording the one genuine parity gap: the applies NO
     ``spark.sql.session.timeZone`` localization (that needs a live client config),
     so a tz-aware timestamp does NOT match a session-tz-localized native result.
 
@@ -163,12 +163,12 @@ def test_tz_naive_timestamp_coerces_to_datetime64ns():
 
 @pytest.mark.xfail(
     reason=(
-        "KNOWN PARITY GAP (findings-lane4-arrow.md / findings-integration.md): "
-        "lane 4 is a pure decoder and applies NO spark.sql.session.timeZone "
+        "KNOWN PARITY GAP (findings-the transport-arrow.md / findings-integration.md): "
+        "the is a pure decoder and applies NO spark.sql.session.timeZone "
         "localization - that needs a live client config it does not have. A "
         "tz-aware Arrow timestamp therefore decodes to its encoded (UTC) wall "
         "clock, NOT the session-tz-localized value the native client would "
-        "produce. Localization, if required for exact parity, belongs in lane 2's "
+        "produce. Localization, if required for exact parity, belongs in the "
         "integration. This xfail pins the gap so it is tracked, not hidden.",
     ),
     strict=True,

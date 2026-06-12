@@ -120,14 +120,19 @@ self.addEventListener("message", async (ev) => {
       self.postMessage({ type: "pcw_error", message: String(e && e.message ? e.message : e) });
     }
   } else if (msg.type === "pcw_run") {
-    // Run user Python (e.g. the notebook kernel dispatches here). The actual
-    // JupyterLite kernel uses its own message protocol; this hook is for the
-    // standalone demo harness + lane 5's window.__pcwRunPython bridge.
+    // Run user Python and return its CAPTURED STDOUT (the run_python_bridge /
+    // e2e contract: snippets `print(json.dumps(...))` and the caller JSON-parses
+    // stdout). Returning runPythonAsync's value instead would yield the last
+    // expression (often None) - the smoke test then sees "undefined".
+    let out = "";
     try {
-      const result = await pyodide.runPythonAsync(msg.code);
-      self.postMessage({ type: "pcw_result", id: msg.id, result: String(result) });
+      pyodide.setStdout({ batched: (s) => { out += s; } });
+      await pyodide.runPythonAsync(msg.code);
+      self.postMessage({ type: "pcw_result", id: msg.id, result: out });
     } catch (e) {
       self.postMessage({ type: "pcw_run_error", id: msg.id, message: String(e) });
+    } finally {
+      pyodide.setStdout({}); // restore default stdout
     }
   }
 });

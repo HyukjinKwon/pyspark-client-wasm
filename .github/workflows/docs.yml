@@ -34,18 +34,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install MkDocs + Material + mkdocstrings
+      - name: Install MkDocs + Material
         run: |
           python -m pip install --upgrade pip
           python -m pip install \
             "mkdocs==1.6.1" \
             "mkdocs-material==9.5.49" \
-            "mkdocstrings[python]==0.27.0" \
-            "mkdocs-autorefs==1.2.0" \
             "pymdown-extensions==10.14"
-          # mkdocstrings introspects the package, so it must import. Install it
-          # with dev extras (pyspark, pyarrow, ...) so the public API resolves.
-          python -m pip install -e ".[dev]"
 
       - name: Build site (strict)
         run: mkdocs build --strict

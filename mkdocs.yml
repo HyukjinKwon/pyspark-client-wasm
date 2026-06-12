@@ -43,20 +43,9 @@ theme:
 
 plugins:
   - search
-  - mkdocstrings:
-      handlers:
-        python:
-          options:
-            docstring_style: sphinx
-            show_source: true
-            show_root_heading: true
-            show_root_full_path: false
-            show_symbol_type_heading: true
-            show_symbol_type_toc: true
-            separate_signature: true
-            show_signature_annotations: true
-            members_order: source
-            heading_level: 2
+  # The API reference (docs/api-reference.md) is hand-written for the tiny,
+  # stable public surface — no mkdocstrings autodoc, which kept the build
+  # fragile (griffe/autorefs version coupling) for little gain here.
 
 markdown_extensions:
   - admonition

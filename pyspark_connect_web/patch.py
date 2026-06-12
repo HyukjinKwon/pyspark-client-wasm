@@ -300,6 +300,27 @@ def is_installed() -> bool:
     return _INSTALLED
 
 
+class _SyncExecutor:
+    """A ThreadPoolExecutor stand-in that runs submitted callables inline.
+
+    Pyodide cannot start OS threads; pyspark's reattach release pool would raise
+    "can't start new thread". ReleaseExecute is best-effort cleanup, so running
+    it synchronously is correct (the SAB bridge serializes RPCs regardless)."""
+
+    def submit(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        from concurrent.futures import Future
+
+        fut: "Future[Any]" = Future()
+        try:
+            fut.set_result(fn(*args, **kwargs))
+        except BaseException as exc:  # noqa: BLE001 - mirror to the future
+            fut.set_exception(exc)
+        return fut
+
+    def shutdown(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+
 def install() -> None:
     """Monkey-patch pyspark.sql.connect to use the grpc-web transport.
 
@@ -378,6 +399,31 @@ def install() -> None:
         DefaultChannelBuilder.toChannel = patched_to_channel  # type: ignore[assignment]
         grpc_lib.SparkConnectServiceStub = patched_stub_factory  # type: ignore[assignment]
 
+        # (e) Pyodide is single-threaded: pyspark's reattachable iterator sends
+        # ReleaseExecute via a ThreadPoolExecutor -> "can't start new thread".
+        # Swap it for a synchronous executor (releases run inline; the SAB bridge
+        # serializes RPCs anyway, and release is best-effort cleanup).
+        try:
+            import pyspark.sql.connect.client.reattach as reattach
+
+            it_cls = reattach.ExecutePlanResponseReattachableIterator
+            _ORIG["reattach_cls"] = it_cls
+            _ORIG["reattach_pool_attr"] = it_cls.__dict__.get(
+                "_get_or_create_release_thread_pool"
+            )
+
+            def _sync_pool(cls: Any) -> Any:
+                if cls._release_thread_pool_instance is None:
+                    cls._release_thread_pool_instance = _SyncExecutor()
+                return cls._release_thread_pool_instance
+
+            it_cls._get_or_create_release_thread_pool = classmethod(  # type: ignore[assignment]
+                _sync_pool
+            )
+            it_cls._release_thread_pool_instance = None
+        except Exception:  # pragma: no cover - reattach should always import
+            pass
+
         _INSTALLED = True
 
 
@@ -391,5 +437,12 @@ def uninstall() -> None:
         DefaultChannelBuilder.__init__ = _ORIG["DCB_init"]
         DefaultChannelBuilder.toChannel = _ORIG["DCB_toChannel"]
         _ORIG["grpc_lib"].SparkConnectServiceStub = _ORIG["stub_cls"]
+        # Restore the reattach release-pool factory (if we patched it).
+        reattach_cls = _ORIG.get("reattach_cls")
+        if reattach_cls is not None:
+            orig_attr = _ORIG.get("reattach_pool_attr")
+            if orig_attr is not None:
+                reattach_cls._get_or_create_release_thread_pool = orig_attr
+            reattach_cls._release_thread_pool_instance = None
         _ORIG.clear()
         _INSTALLED = False

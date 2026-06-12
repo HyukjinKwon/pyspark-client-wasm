@@ -331,7 +331,7 @@ class _AtomicsBackend:
         # Announce to the main thread so the page-side Bridge attaches the same
         # buffer. The mechanism differs by transport (see __init__).
         if self._transport == "kernel":
-            self._js.postMessage(
+            self._post(
                 {
                     "__pcw__": {
                         "type": "sab",
@@ -382,9 +382,27 @@ class _AtomicsBackend:
         # data; the Bridge reads everything from the SAB. The envelope shape
         # differs by transport so the kernel's own message framing ignores ours.
         if self._transport == "kernel":
-            self._js.postMessage({"__pcw__": {"type": "rpc"}})
+            self._post({"__pcw__": {"type": "rpc"}})
         else:
-            self._js.postMessage({"type": "pcw_rpc"})
+            self._post({"type": "pcw_rpc"})
+
+    def _post(self, payload: dict) -> None:
+        """postMessage a dict to the main thread as a plain JS object.
+
+        A Python dict crosses the worker postMessage boundary as a PyProxy, which
+        structuredClone cannot serialize ("could not be cloned"). Convert it to a
+        real JS object (deep); JsProxy values like SharedArrayBuffers pass through.
+        """
+        try:
+            from pyodide.ffi import to_js
+        except Exception:
+            # Not under Pyodide (unit tests with a fake js): post as-is so the
+            # fake records the plain dict for assertions.
+            self._js.postMessage(payload)
+            return
+        self._js.postMessage(
+            to_js(payload, dict_converter=self._js.Object.fromEntries)
+        )
 
     def _grow_data_sab(self, min_bytes: int) -> None:
         """Allocate a larger data SAB (next power-of-two >= ``min_bytes``) and

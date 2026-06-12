@@ -341,7 +341,11 @@ class _AtomicsBackend:
                 }
             )
         elif hasattr(self._js, "__pcw_register_sab"):
-            self._js.__pcw_register_sab(self._control_sab, data_sab)
+            # getattr (not attribute syntax): a `.__pcw_register_sab` identifier
+            # inside this class body is name-mangled by Python to
+            # `_AtomicsBackend__pcw_register_sab`, which the JS global does not
+            # have -> AttributeError. The string form is not mangled.
+            getattr(self._js, "__pcw_register_sab")(self._control_sab, data_sab)
 
     # -- request marshalling ------------------------------------------------- #
     def _write_request(self, request: dict) -> None:

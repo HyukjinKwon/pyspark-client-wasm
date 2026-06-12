@@ -24,6 +24,7 @@ E2E_REQUIRE_STACK=1).
 
 Keep the queries here in lockstep with v0-checklist.spec.ts.
 """
+
 from __future__ import annotations
 
 import argparse

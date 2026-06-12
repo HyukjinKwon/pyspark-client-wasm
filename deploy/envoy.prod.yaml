@@ -1,0 +1,336 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# PRODUCTION Envoy config for pyspark-connect-web (lane 5).
+#
+# This is the HARDENED overlay. The dev config (deploy/envoy.yaml) is permissive
+# on purpose (wildcard CORS, plaintext, no auth) for laptop bring-up. THIS file
+# is what you deploy anywhere reachable from a network you do not fully control.
+# It is a full, self-contained Envoy bootstrap (Envoy has no native "overlay
+# merge"); diff it against deploy/envoy.yaml to see exactly what hardened.
+#
+# What is different from dev (deploy/envoy.yaml):
+#   1. TLS termination on both listeners (downstream HTTPS / wss). Browsers
+#      require a secure context for crossOriginIsolated + SharedArrayBuffer on
+#      any non-localhost origin, so prod MUST be HTTPS. Cert mounting documented
+#      below and in deploy/README.md.
+#   2. TIGHTENED CORS: explicit allowlist of origins (NO ".*" wildcard). Driven
+#      by the placeholder "https://YOUR-LITE-ORIGIN.example.com"; replace it (or
+#      template it via envsubst — see scripts/render_envoy_prod.sh).
+#   3. Bearer-token / auth-header pass-through to the Connect server. Spark
+#      Connect has NO built-in authentication; the proxy is the enforcement
+#      point. We (a) allow the `authorization` request header through CORS and
+#      forward it upstream, and (b) REQUIRE it via a Lua filter that rejects any
+#      request without a Bearer token (401) before it reaches Spark. Swap the Lua
+#      stub for ext_authz/JWT (commented below) for real validation.
+#   4. Request size limit aligned with large Arrow results: per-connection buffer
+#      limits + a generous (but bounded) max request bytes, so a single
+#      createDataFrame / AddArtifacts upload cannot exhaust the proxy, while large
+#      *downstream* Arrow result streams are unbounded (server-streaming).
+#   5. Health (/healthz) and readiness (/ready) endpoints on a dedicated admin-ish
+#      listener, plus an Envoy /ready via the health_check filter, so a load
+#      balancer / k8s probe has a cheap target that does NOT hit Spark.
+#   6. Admin bound to 127.0.0.1 only (never expose :9901 publicly).
+#
+# Keep in lockstep with deploy/envoy.yaml when the grpc_web/COOP/COEP plumbing
+# changes — the dev file is the source of truth for the transport wiring.
+
+admin:
+  address:
+    # NEVER expose the admin interface publicly. Bind to loopback inside the pod.
+    socket_address: { address: 127.0.0.1, port_value: 9901 }
+
+static_resources:
+  listeners:
+    # ---------------------------------------------------------------------
+    # grpc-web endpoint  (browser client -> Spark Connect)  — TLS + auth + CORS
+    # ---------------------------------------------------------------------
+    - name: grpcweb_listener
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 8443 }
+      # Cap per-connection buffering so a malicious/huge upload frame cannot
+      # balloon proxy memory. Downstream result streams are not buffered (they
+      # stream), so this does not cap Arrow *result* size.
+      per_connection_buffer_limit_bytes: 33554432   # 32 MiB
+      filter_chains:
+        - transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_params:
+                  tls_minimum_protocol_version: TLSv1_2
+                tls_certificates:
+                  # Mount your server cert + key here (see deploy/README.md
+                  # "TLS / cert mounting"). For k8s use a Secret volume; for
+                  # docker-compose a bind mount of ./certs:/etc/envoy/certs:ro.
+                  - certificate_chain:
+                      filename: /etc/envoy/certs/tls.crt
+                    private_key:
+                      filename: /etc/envoy/certs/tls.key
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: grpcweb
+                codec_type: AUTO
+                # Long-lived ExecutePlan/ReattachExecute server streams: do not
+                # let Envoy idle them out. Same as dev.
+                stream_idle_timeout: 0s
+                # Bound request headers + total request size (see note above).
+                max_request_headers_kb: 96
+                common_http_protocol_options:
+                  # Cap how long a single (non-streaming) request may take to
+                  # arrive; streaming responses are governed by the 0s route
+                  # timeout below, not this.
+                  idle_timeout: 300s
+                route_config:
+                  name: grpcweb_route
+                  virtual_hosts:
+                    - name: grpcweb_host
+                      # Match only the configured public hostname in prod.
+                      domains: ["YOUR-PUBLIC-HOST.example.com", "YOUR-PUBLIC-HOST.example.com:8443"]
+                      # TIGHTENED CORS — explicit origin allowlist, NO wildcard.
+                      # Replace the placeholder origin(s) with your JupyterLite
+                      # site origin(s). Use exact string match, not regex ".*".
+                      cors:
+                        allow_origin_string_match:
+                          - exact: "https://YOUR-LITE-ORIGIN.example.com"
+                        allow_methods: "POST, OPTIONS"
+                        allow_headers: >-
+                          keep-alive,user-agent,cache-control,content-type,content-transfer-encoding,
+                          x-grpc-web,x-user-agent,grpc-timeout,authorization,x-spark-connect-session-id
+                        expose_headers: "grpc-status,grpc-message,x-spark-connect-session-id"
+                        allow_credentials: true
+                        max_age: "86400"
+                      routes:
+                        - match: { prefix: "/" }
+                          route:
+                            cluster: spark-connect
+                            # Server-streaming: no per-route timeout.
+                            timeout: 0s
+                            max_stream_duration:
+                              grpc_timeout_header_max: 0s
+                http_filters:
+                  - name: envoy.filters.http.grpc_web
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
+                  - name: envoy.filters.http.cors
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
+                  # --- AUTH ENFORCEMENT (Spark Connect has none of its own) ----
+                  # MINIMAL gate: reject any request lacking a Bearer token, and
+                  # let CORS preflights (OPTIONS) through. This stops anonymous
+                  # access; it does NOT validate the token. For real validation,
+                  # replace this whole filter with envoy.filters.http.jwt_authn
+                  # or envoy.filters.http.ext_authz (sketch at bottom of file).
+                  # The `authorization` header is forwarded upstream to Spark
+                  # either way (Spark can read it via interceptors if configured).
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      default_source_code:
+                        inline_string: |
+                          function envoy_on_request(handle)
+                            local method = handle:headers():get(":method")
+                            if method == "OPTIONS" then
+                              return            -- let CORS preflight through
+                            end
+                            local auth = handle:headers():get("authorization")
+                            if auth == nil or auth:sub(1, 7) ~= "Bearer " then
+                              handle:respond(
+                                {[":status"] = "401",
+                                 ["content-type"] = "text/plain",
+                                 ["www-authenticate"] = "Bearer"},
+                                "missing or malformed Authorization: Bearer <token>\n")
+                            end
+                            -- Token present: pass through. Spark Connect itself
+                            -- does not authenticate; validate upstream of Spark
+                            -- (ext_authz/jwt_authn) before trusting this.
+                          end
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+    # ---------------------------------------------------------------------
+    # static site host  (JupyterLite) — TLS + COOP/COEP — DECISIONS.md #4
+    # ---------------------------------------------------------------------
+    - name: static_listener
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 8444 }
+      filter_chains:
+        - transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_params:
+                  tls_minimum_protocol_version: TLSv1_2
+                tls_certificates:
+                  - certificate_chain:
+                      filename: /etc/envoy/certs/tls.crt
+                    private_key:
+                      filename: /etc/envoy/certs/tls.key
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: static
+                codec_type: AUTO
+                route_config:
+                  name: static_route
+                  virtual_hosts:
+                    - name: static_host
+                      domains: ["YOUR-PUBLIC-HOST.example.com", "YOUR-PUBLIC-HOST.example.com:8444"]
+                      routes:
+                        - match: { prefix: "/" }
+                          route: { cluster: static-site }
+                          # MANDATORY cross-origin isolation headers (DECISIONS.md
+                          # #4) — same as dev. Required for SharedArrayBuffer.
+                          response_headers_to_add:
+                            - header:
+                                key: "Cross-Origin-Opener-Policy"
+                                value: "same-origin"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: "Cross-Origin-Embedder-Policy"
+                                value: "require-corp"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: "Cross-Origin-Resource-Policy"
+                                value: "cross-origin"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            # Defense-in-depth headers for the notebook origin.
+                            - header:
+                                key: "X-Content-Type-Options"
+                                value: "nosniff"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: "Strict-Transport-Security"
+                                value: "max-age=31536000; includeSubDomains"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+    # ---------------------------------------------------------------------
+    # health / readiness listener (plaintext, loopback-ish; for LB / k8s probes)
+    #   GET /healthz -> 200 "live"     (Envoy process is up)
+    #   GET /ready   -> 200/503        (driven by the health_check filter; also
+    #                                   reflects whether clusters have endpoints)
+    # This listener does NOT touch Spark, so probes are cheap and never wedge on
+    # a slow Connect server. Expose :8089 to your orchestrator's probe only.
+    # ---------------------------------------------------------------------
+    - name: health_listener
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 8089 }
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: health
+                codec_type: AUTO
+                route_config:
+                  name: health_route
+                  virtual_hosts:
+                    - name: health_host
+                      domains: ["*"]
+                      routes:
+                        - match: { path: "/healthz" }
+                          direct_response:
+                            status: 200
+                            body: { inline_string: "live\n" }
+                http_filters:
+                  # Responds 200 on /ready while not draining; 503 during drain.
+                  - name: envoy.filters.http.health_check
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.health_check.v3.HealthCheck
+                      pass_through_mode: false
+                      headers:
+                        - name: ":path"
+                          string_match: { exact: "/ready" }
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+    # Upstream Spark Connect gRPC server (HTTP/2, h2c inside the trusted network).
+    # In production keep Spark on a private network; the proxy is the only public
+    # surface. If Spark is reachable over TLS, add a transport_socket here too.
+    - name: spark-connect
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      # Bound upstream buffering as well.
+      per_connection_buffer_limit_bytes: 33554432   # 32 MiB
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      # Active health check so /ready and routing reflect real upstream health.
+      health_checks:
+        - timeout: 2s
+          interval: 10s
+          unhealthy_threshold: 3
+          healthy_threshold: 1
+          tcp_health_check: {}
+      load_assignment:
+        cluster_name: spark-connect
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: spark-connect
+                      port_value: 15002
+
+    - name: static-site
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: static-site
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: static
+                      port_value: 80
+
+# ---------------------------------------------------------------------------
+# REAL AUTH (replace the Lua gate above with one of these in production)
+# ---------------------------------------------------------------------------
+# Option A — validate a JWT (e.g. from your IdP) before forwarding to Spark:
+#
+#   - name: envoy.filters.http.jwt_authn
+#     typed_config:
+#       "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+#       providers:
+#         idp:
+#           issuer: "https://your-idp.example.com/"
+#           audiences: ["pyspark-connect-web"]
+#           remote_jwks:
+#             http_uri:
+#               uri: "https://your-idp.example.com/.well-known/jwks.json"
+#               cluster: idp_jwks
+#               timeout: 5s
+#             cache_duration: 600s
+#       rules:
+#         - match: { prefix: "/" }
+#           requires: { provider_name: idp }
+#
+# Option B — delegate to an external authz service (opaque tokens, ACLs):
+#
+#   - name: envoy.filters.http.ext_authz
+#     typed_config:
+#       "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+#       grpc_service:
+#         envoy_grpc: { cluster_name: ext_authz }
+#         timeout: 1s
+#       transport_api_version: V3
+#
+# Both run BEFORE the router and AFTER cors, so preflights still succeed.
+# Whichever you choose, the `authorization` header is forwarded to Spark; Spark
+# Connect does not check it itself (it has no built-in auth — that is the whole
+# reason the proxy enforces it).

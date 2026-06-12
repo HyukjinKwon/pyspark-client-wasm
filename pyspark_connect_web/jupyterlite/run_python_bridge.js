@@ -46,14 +46,37 @@ export function installRunPython(worker) {
   };
 }
 
-// Shape B: JupyterLite kernel. Open integration item — see findings #1.
-export function installRunPythonForJupyterLite(/* kernelConnection */) {
-  globalThis.__pcwRunPython = function () {
-    return Promise.reject(
-      new Error(
-        "__pcwRunPython is not wired into the JupyterLite kernel yet — see " +
-          "team/findings-lane3-bridge.md open item #1 (kernel worker integration)."
-      )
+// Shape B: JupyterLite kernel. Drives the kernel's own execute protocol via a
+// Jupyter `Kernel.IKernelConnection` (the object the JupyterLab/Lite services
+// manager hands you). The kernel worker already runs Pyodide (and, when the
+// page is cross-origin isolated, our SAB bridge is attached via
+// pcw_kernel_bridge.js). We just submit code and collect the reply text.
+//
+// `kernelConnection` must expose `.requestExecute({code})` returning an
+// IFuture with `.onIOPub` and `.done` — the standard @jupyterlab/services shape.
+export function installRunPythonForJupyterLite(kernelConnection) {
+  if (!kernelConnection || typeof kernelConnection.requestExecute !== "function") {
+    throw new Error(
+      "installRunPythonForJupyterLite: expected a Jupyter IKernelConnection " +
+        "(with .requestExecute). Pass the kernel from the Lite services manager."
     );
+  }
+  globalThis.__pcwRunPython = function (src) {
+    return new Promise((resolve, reject) => {
+      const future = kernelConnection.requestExecute({ code: src });
+      let out = "";
+      future.onIOPub = (msg) => {
+        const t = msg.header && msg.header.msg_type;
+        const c = msg.content || {};
+        if (t === "execute_result" && c.data && c.data["text/plain"]) {
+          out = c.data["text/plain"];
+        } else if (t === "stream" && c.text) {
+          out += c.text;
+        } else if (t === "error") {
+          reject(new Error(((c.ename || "") + ": " + (c.evalue || "")).trim()));
+        }
+      };
+      future.done.then(() => resolve(out)).catch(reject);
+    });
   };
 }

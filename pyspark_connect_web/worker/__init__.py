@@ -25,6 +25,7 @@ from __future__ import annotations
 from .sab_channel import (
     SabSyncChannel,
     SyncBackend,
+    TransportAborted,
     TransportError,
     TransportTimeout,
     is_pyodide,
@@ -33,6 +34,7 @@ from .sab_channel import (
 __all__ = [
     "SabSyncChannel",
     "SyncBackend",
+    "TransportAborted",
     "TransportError",
     "TransportTimeout",
     "is_pyodide",

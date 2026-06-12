@@ -119,3 +119,55 @@ so `.collect()` returns data synchronously. See `API_CONTRACT.md` for the seam.
   if the parity test diverges on a timestamp/struct column, wrap our DataFrame
   with `_create_converter_to_pandas` using live session config, or pass us the tz.
   Only known gap to byte-exact parity; details in `team/findings-lane4-arrow.md`.
+- INTEGRATION 2026-06-12: Real end-to-end PROVEN. Built `tests/integration/`
+  (real in-process Spark Connect server on an ephemeral free port + a pure-Python
+  grpc-web<->gRPC bridge = Envoy stand-in, grpcio test-only). v0 matrix PASSES vs
+  the real engine: range(10).collect, sql, groupBy/agg/toPandas EXACT-parity vs
+  native client, createDataFrame round-trip, 200k-row multi-response stream.
+  FIXED a real DECISIONS.md #6 bug in `transport/grpcweb.py`: a trailer-less
+  (dropped) stream RAISED instead of ending cleanly, so PySpark's reattachable
+  iterator never issued ReattachExecute (its retry path only retries
+  grpc.RpcError) — now returns StopIteration; mid-stream-cut recovery verified
+  live (ReattachExecute called, all rows recovered). Updated 2 lane-1 guard tests
+  to the corrected contract; all 87 unit tests still green; 94 total. STILL
+  UNTESTED: tz/struct-mode parity, AddArtifacts, the lane-3 SAB browser path (the
+  test injects the bridge directly, bypassing Atomics/SAB). No grpcio in the package.
+- LANE 5 2026-06-12 (prod-hardening): Added prod overlay (`deploy/envoy.prod.yaml`
+  + `deploy/compose.prod.yaml`: TLS, exact-origin CORS, bearer-token Lua gate →
+  jwt_authn/ext_authz, 32MiB limits, :8089 health/ready, loopback admin, private
+  Spark); `Makefile` + `scripts/` (build_site.sh, render_envoy_prod.sh,
+  gen_dev_cert.sh, validate_deploy.py). WIRED the e2e to `window.__pcwRunPython`
+  (no more test.fixme; query #3 now matches reference.py; a one-shot page.route
+  ExecutePlan-abort drives the ReattachExecute recovery test — consistent with
+  INTEGRATION's verified dropped-stream→StopIteration→reattach fix; two-axis
+  graceful skip). CI: py matrix + ruff lint (scoped) + build-wheel(no-grpcio) +
+  validate_deploy headers/CORS guard. Docs: `docs/security.md` (5-area threat
+  model), `docs/packaging-release.md`, trademark/identity disclaimer + repo-vs-
+  package name note in README/docs. 105 unit tests green; no grpcio in package.
+  **ACTION lanes 1–4/integrator:** (1) ship a `py.typed` marker + package-data
+  (`worker/*.js`,`jupyterlite/*`) so the wheel is complete + typed — lane 5 won't
+  edit package source; (2) fix 2 ruff findings (F401 transport/grpcweb.py
+  TRAILER_FLAG, F841 worker/sab_channel.py `length`) to unblock whole-repo lint.
+  **ACTION lane 3:** wire `window.__pcwRunPython` into the JupyterLite kernel
+  (your open item #1) — until then the e2e bridge tests skip. Details in
+  `team/findings-lane5-deploy.md`.
+- LANE 3 2026-06-12 (hardening): Closed my two prior blockers. (1) **JupyterLite
+  kernel integration** without forking the pyodide kernel: page-side
+  `jupyterlite/pcw_kernel_bridge.js` wraps the global `Worker` so each kernel
+  worker gets our fetch `Bridge`; `_AtomicsBackend` gains an auto-selected
+  `transport="kernel"` mode that posts a namespaced `{__pcw__:{...}}` envelope the
+  kernel's coincident/comlink framing ignores — `pcw.install()` is all a notebook
+  needs. Wired `run_python_bridge.js` Shape B to the real kernel execute (lane 5's
+  `__pcwRunPython` no longer throws). Header-less hosts get
+  `jupyterlite/coi-serviceworker.js` (COOP/COEP via SW + one reload); hosting matrix
+  in `jupyterlite/README.md`. **ACTION lane 5:** inject `coi-serviceworker.js` +
+  `pcw_kernel_bridge.js` as `<script>`s before the app bundle (template in README);
+  add `jupyterlite/*.js` to package-data per your earlier ask. (2) **Large results**:
+  response side now uses bounded-window transfer (`meta.more` + CHUNK_ACK
+  reassembly) + request-side SAB realloc — the 16 MiB ceiling is gone. (3) **Errors**:
+  typed `TransportError`/`TransportTimeout`/`TransportAborted`; `HttpResponse.headers`
+  now populated (resolves my prior open Q2 so lane 1's grpc-status-in-headers fallback
+  works). Fixed lane 5's flagged ruff F841 (`length` in sab_channel.py). +11 unit tests
+  (`tests/test_sab_atomics_backend.py`, fake-js handshake); 105 non-e2e green; no grpcio.
+  **ASK lane 1** (findings #6): let a raw `TransportError` propagate, or want me to wrap
+  dropped-connection as `SparkConnectGrpcException` UNAVAILABLE for uniform reattach?

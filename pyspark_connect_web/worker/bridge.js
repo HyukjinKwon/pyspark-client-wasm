@@ -14,6 +14,15 @@
 // in `sab_channel.py` and documented in team/findings-lane3-bridge.md. Keep the
 // three in sync by VALUE.
 //
+// Large results — bounded-window transfer
+// ----------------------------------------
+// The data SAB has a fixed capacity. A single logical payload (a unary body or
+// one server-stream chunk) larger than the payload region is written in
+// successive *windows* of at most `payloadCapacity` bytes. Each window carries a
+// meta flag `more:true` until the last window of that payload; the worker reads
+// a window, and if `more` it acks (S_CHUNK_ACK) and waits for the next window.
+// This delivers arbitrarily large results over a fixed buffer with no realloc.
+//
 // Usage (main thread / page):
 //   import { installBridge } from "./bridge.js";
 //   const worker = new Worker("./worker_bootstrap.js", { type: "module" });
@@ -27,6 +36,7 @@ const C_LENGTH = 1;
 const C_STATUS = 2;
 const C_SEQ = 3;
 const C_GEN = 4;
+const C_CAP = 5; // current data-SAB capacity in bytes (published by the worker)
 
 // ---- STATE values ---------------------------------------------------------
 const S_IDLE = 0;
@@ -35,12 +45,17 @@ const S_RESP_CHUNK = 2;
 const S_RESP_END = 3;
 const S_RESP_ERROR = 4;
 const S_CHUNK_ACK = 5;
+const S_REALLOC_REQ = 6;
+
+// Must match _META_ZONE in sab_channel.py: reserved meta zone at the front of
+// the data region. Window payload capacity = total capacity - meta zone.
+const META_ZONE = 4096;
 
 const _enc = new TextEncoder();
 const _dec = new TextDecoder();
 
 // A single bridge instance per worker. Holds the SAB views handed over by the
-// worker once at startup.
+// worker once at startup (and re-handed on a data-SAB realloc).
 class Bridge {
   constructor() {
     this.ctrl = null; // Int32Array over control SAB
@@ -51,6 +66,11 @@ class Bridge {
   attach(controlSab, dataSab) {
     this.ctrl = new Int32Array(controlSab);
     this.data = new Uint8Array(dataSab);
+  }
+
+  // Payload bytes that fit in one window of the current data SAB.
+  _payloadCapacity() {
+    return this.data.length - META_ZONE - 4 /* u32 meta_len */;
   }
 
   // ---- little-endian u32 helpers over the data region ---------------------
@@ -86,8 +106,8 @@ class Bridge {
     return { header, body };
   }
 
-  // ---- write a response payload + meta, flip STATE ------------------------
-  _writeResponse(state, status, meta, payload) {
+  // ---- write one window [u32 meta_len][meta json][payload], flip STATE -----
+  _writeWindow(state, status, meta, payload) {
     const metaBytes = _enc.encode(JSON.stringify(meta || {}));
     let off = 0;
     off = this._putU32(off, metaBytes.length);
@@ -103,16 +123,45 @@ class Bridge {
     Atomics.notify(this.ctrl, C_STATE);
   }
 
-  _writeError(message) {
-    this._writeResponse(S_RESP_ERROR, 0, { message: String(message) }, null);
+  // ---- emit one logical message (unary body / one stream chunk) as 1+ -----
+  // windows, waiting for the worker to ack each non-final window. `metaBase`
+  // is merged into the FIRST window's meta (status/headers context). Returns
+  // false if the worker abandoned the exchange (went IDLE), true otherwise.
+  async _emitMessage(status, metaBase, bytes) {
+    const cap = this._payloadCapacity();
+    const total = bytes ? bytes.length : 0;
+    let sent = 0;
+    let first = true;
+    do {
+      const end = Math.min(sent + cap, total);
+      const window = bytes ? bytes.subarray(sent, end) : null;
+      const more = end < total;
+      const meta = Object.assign({}, first ? metaBase || {} : {}, { more });
+      this._writeWindow(S_RESP_CHUNK, status, meta, window);
+      sent = end;
+      first = false;
+      if (more) {
+        // Worker must ack this window before we write the next one.
+        const ack = await this._awaitWorker(S_CHUNK_ACK);
+        if (ack === S_IDLE) return false;
+      }
+    } while (sent < total);
+    return true;
+  }
+
+  _writeError(message, kind) {
+    this._writeWindow(
+      S_RESP_ERROR,
+      0,
+      { message: String(message), kind: kind || "error" },
+      null
+    );
   }
 
   // ---- wait (on the main thread, async) for the worker to ack -------------
   // The main thread MUST NOT Atomics.wait. We poll the control word via
   // Atomics.waitAsync where available, else a microtask/timeout poll loop.
   async _awaitWorker(expect) {
-    // expect: the STATE value the worker will write when it wants the next
-    // chunk (S_CHUNK_ACK) or is done (S_IDLE).
     while (true) {
       const cur = Atomics.load(this.ctrl, C_STATE);
       if (cur === expect || cur === S_IDLE) return cur;
@@ -132,6 +181,7 @@ class Bridge {
     if (!this.ctrl) return;
     if (Atomics.load(this.ctrl, C_STATE) !== S_REQ_READY) return;
     this._busy = true;
+    let timer = null;
     try {
       const { header, body } = this._readRequest();
       const init = {
@@ -145,53 +195,82 @@ class Bridge {
       // AbortController gives us timeout parity with the worker's Atomics.wait.
       const ctl = new AbortController();
       init.signal = ctl.signal;
-      let timer = null;
+      let timedOut = false;
       if (header.timeout != null) {
-        timer = setTimeout(() => ctl.abort(), header.timeout * 1000);
+        timer = setTimeout(() => {
+          timedOut = true;
+          ctl.abort();
+        }, header.timeout * 1000);
       }
 
       let resp;
       try {
         resp = await fetch(header.url, init);
       } catch (e) {
-        this._writeError(`fetch failed: ${e && e.message ? e.message : e}`);
+        // Distinguish a timeout-driven abort from a network/abort failure so
+        // the worker can raise TransportTimeout vs TransportAborted.
+        const isAbort = e && e.name === "AbortError";
+        const kind = timedOut ? "timeout" : isAbort ? "abort" : "error";
+        const msg = timedOut
+          ? `fetch timed out after ${header.timeout}s`
+          : `fetch failed: ${e && e.message ? e.message : e}`;
+        this._writeError(msg, kind);
         return;
       } finally {
-        if (timer) clearTimeout(timer);
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      }
+
+      // Surface response headers so lane 1 can read grpc-status from HTTP
+      // headers when a proxy puts it there (e.g. empty unary, or HTTP error
+      // with a grpc-status header). Cheap to collect; lane 1 ignores unknowns.
+      const headers = {};
+      try {
+        resp.headers.forEach((v, k) => {
+          headers[k] = v;
+        });
+      } catch (_) {
+        /* Headers not iterable in some shims; leave empty. */
       }
 
       if (header.kind === "unary") {
         const buf = new Uint8Array(await resp.arrayBuffer());
-        this._writeResponse(S_RESP_CHUNK, resp.status, { ok: resp.ok }, buf);
+        // One logical message, windowed if larger than the payload region.
+        // HTTP errors are NOT transport errors: pass the status + headers + any
+        // body through so lane 1 raises the right grpc exception.
+        await this._emitMessage(resp.status, { ok: resp.ok, headers }, buf);
         // worker reads, sets S_IDLE; nothing more to do.
         return;
       }
 
       // ---- server streaming ----
-      // Stream the response body, writing each chunk into the SAB and waiting
-      // for the worker to consume (S_CHUNK_ACK) before the next.
+      // Each reader chunk is one logical message; window it, then wait for the
+      // worker to consume + request the next (S_CHUNK_ACK) before reading on.
       const reader = resp.body.getReader();
-      // First-chunk status goes out with the first RESP_CHUNK; if the stream is
-      // empty we still need to flip STATE so the worker isn't stuck — handled by
-      // the read loop terminating into S_RESP_END.
       let first = true;
       while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (!value || value.length === 0) continue;
-        this._writeResponse(
-          S_RESP_CHUNK,
-          resp.status,
-          first ? { ok: resp.ok } : {},
-          value
-        );
-        first = false;
-        // Wait for the worker to consume and request the next chunk.
-        const ack = await this._awaitWorker(S_CHUNK_ACK);
-        if (ack === S_IDLE) {
-          // worker abandoned the stream (generator closed / error). Stop.
+        let value, done;
+        try {
+          ({ value, done } = await reader.read());
+        } catch (e) {
+          const isAbort = e && e.name === "AbortError";
+          this._writeError(
+            `stream read failed: ${e && e.message ? e.message : e}`,
+            timedOut ? "timeout" : isAbort ? "abort" : "error"
+          );
           return;
         }
+        if (done) break;
+        if (!value || value.length === 0) continue;
+        const metaBase = first ? { ok: resp.ok, headers } : {};
+        const cont = await this._emitMessage(resp.status, metaBase, value);
+        first = false;
+        if (!cont) return; // worker abandoned the stream (closed / errored)
+        // Wait for the worker to consume this message and request the next.
+        const ack = await this._awaitWorker(S_CHUNK_ACK);
+        if (ack === S_IDLE) return;
       }
       // End of stream.
       Atomics.store(this.ctrl, C_LENGTH, 0);
@@ -199,19 +278,20 @@ class Bridge {
       Atomics.notify(this.ctrl, C_STATE);
     } catch (e) {
       try {
-        this._writeError(e && e.message ? e.message : String(e));
+        this._writeError(e && e.message ? e.message : String(e), "error");
       } catch (_) {
         /* SAB unusable; nothing else we can do */
       }
     } finally {
+      if (timer) clearTimeout(timer);
       this._busy = false;
     }
   }
 }
 
 // installBridge wires a Worker's messages to a Bridge instance. The worker is
-// expected to post {type:"pcw_sab", control, data} once, then {type:"pcw_rpc"}
-// for each request (the nudge; all data is in the SAB).
+// expected to post {type:"pcw_sab", control, data} once (and again on a data
+// realloc), then {type:"pcw_rpc"} for each request (the nudge; data in the SAB).
 export function installBridge(worker) {
   const bridge = new Bridge();
   worker.addEventListener("message", (ev) => {
@@ -233,10 +313,16 @@ export const PROTOCOL = {
   C_STATUS,
   C_SEQ,
   C_GEN,
+  C_CAP,
   S_IDLE,
   S_REQ_READY,
   S_RESP_CHUNK,
   S_RESP_END,
   S_RESP_ERROR,
   S_CHUNK_ACK,
+  S_REALLOC_REQ,
+  META_ZONE,
 };
+
+// Exported for unit testing the windowing logic without a browser.
+export { Bridge };

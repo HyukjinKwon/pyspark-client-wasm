@@ -13,22 +13,38 @@ from `DECISIONS.md`:
 - [ ] `spark.sql("select 1 as x").collect()` works
 - [ ] a mid-stream disconnect recovers via ReattachExecute
 
-## Status: SCAFFOLD
+## Status: WIRED (gated)
 
-The full browser stack (lanes 1–4 + JupyterLite build) is not runnable yet, so
-each checklist item is wired as a Playwright test with a clearly-marked `TODO`
-hook describing exactly what the in-page JS/Python must do. The suite **skips
-gracefully** when the stack is down (no JupyterLite page reachable at
-`E2E_BASE_URL`) instead of failing, so it is safe to run in CI today. As lanes
-land, remove the `test.fixme(...)` markers and fill the hooks.
+Every checklist item is a real Playwright test that drives lane 3's
+`window.__pcwRunPython(src)` bridge
+(`pyspark_connect_web/jupyterlite/run_python_bridge.js`) and asserts the
+DECISIONS.md v0 matrix. There are **no more `test.fixme` markers** — instead the
+suite degrades gracefully on two axes:
+
+1. **Stack down** (JupyterLite page unreachable at `E2E_BASE_URL`): every test
+   skips, unless `E2E_REQUIRE_STACK=1` (then it is a hard failure — the CI gate
+   to flip once the stack lands).
+2. **Bridge not wired** (page is up but `window.__pcwRunPython` is absent, e.g.
+   the JupyterLite-kernel integration in `team/findings-lane3-bridge.md` #1 is
+   still pending): the bridge-dependent tests skip with a clear reason, again
+   unless `E2E_REQUIRE_STACK=1`. The `crossOriginIsolated` test needs no bridge
+   and runs whenever the page is up.
+
+The query in test #3 (filter/groupBy/agg) is kept **byte-for-byte** in lockstep
+with `reference.py::build_reference`.
+
+The mid-stream-disconnect test (DECISIONS.md #6) arms a one-shot Playwright
+`page.route()` that aborts the first `ExecutePlan` POST after it starts; the
+client's reattachable iterator must recover via `ReattachExecute` (a path we do
+**not** intercept) and still return the full count.
 
 ## Layout
 
 | File | Purpose |
 |------|---------|
 | `playwright.config.ts` | Playwright config; reads `E2E_BASE_URL` (default `http://localhost:8000`) |
-| `v0-checklist.spec.ts` | One test per DECISIONS.md checklist item, with TODO hooks |
-| `helpers.ts` | Shared helpers: stack-up probe, kernel-ready wait, run-cell |
+| `v0-checklist.spec.ts` | One test per DECISIONS.md checklist item, driving the bridge |
+| `helpers.ts` | Shared helpers: stack-up probe, bridge probe, kernel-ready wait, run-cell, mid-stream-disconnect injector |
 | `reference.py` | Reference-result generator — runs the same queries on a **native** Spark Connect client and writes `reference.json` for the browser run to compare against |
 | `package.json` | npm deps (`@playwright/test`) + scripts |
 
@@ -80,4 +96,5 @@ If the stack is down, step 3 reports the checklist items as skipped, not failed.
 | `E2E_BASE_URL` | `http://localhost:8000` | JupyterLite page URL (Envoy static host) |
 | `E2E_SPARK_REMOTE` | `sc://localhost:8081/;transport=grpcweb` | endpoint the in-page client connects to |
 | `E2E_REFERENCE` | `tests/e2e/reference.json` | reference results to compare `toPandas()` against |
-| `E2E_REQUIRE_STACK` | unset | if set to `1`, missing stack is a hard failure (CI gate once stack lands) |
+| `E2E_KERNEL_TIMEOUT_MS` | `150000` | how long to wait for the Pyodide kernel + `pyspark` import before failing |
+| `E2E_REQUIRE_STACK` | unset | if `1`, a missing stack **or** a missing `window.__pcwRunPython` bridge is a hard failure (CI gate once stack lands) |

@@ -289,20 +289,32 @@ def test_server_stream_error_trailer_raises_after_messages():
         next(it)
 
 
-def test_server_stream_dropped_without_trailer_raises():
-    """GUARD DECISIONS.md #6: a stream that ends with no trailer is a dropped
-    connection — must surface as an error so the client reattaches, not silently
-    end."""
+def test_server_stream_dropped_without_trailer_ends_cleanly_for_reattach():
+    """GUARD DECISIONS.md #6 (CORRECTED): a stream that ends with no trailer is a
+    dropped connection mid-result. It must end the iterator *cleanly*
+    (StopIteration), delivering the messages received so far and NOT raising — so
+    PySpark's ``ExecutePlanResponseReattachableIterator`` recovers the rest via
+    ReattachExecute.
+
+    Root cause this guards: lane1 originally *raised* ``SparkConnectGrpcException``
+    here, on the assumption it would make the client reattach. It does the
+    opposite — PySpark's retry policy only retries ``grpc.RpcError``, so the raise
+    propagated to the user and ReattachExecute never fired. Proven against a real
+    server in tests/integration/test_real_round_trip.py."""
     chunks = [encode_message(_execute_response("partial").SerializeToString())]
     ch = FakeChannel(stream_chunks=chunks)
     stub = GrpcWebStub(ch, base_url="")
     it = stub.ExecutePlan(pb.ExecutePlanRequest())
-    assert next(it).session_id == "partial"
-    with pytest.raises(SparkConnectGrpcException, match="without a trailer"):
+    assert next(it).session_id == "partial"  # message received before drop
+    # Drop with no trailer -> iterator ends cleanly (no raise).
+    with pytest.raises(StopIteration):
         next(it)
 
 
-def test_server_stream_trailing_partial_frame_raises():
+def test_server_stream_trailing_partial_frame_ends_cleanly_for_reattach():
+    """A trailing *partial* frame with no trailer is the same dropped-connection
+    condition as a clean cut (the wire was severed mid-frame). End cleanly so the
+    reattach machinery refetches from the last response_id; don't raise."""
     full = encode_message(_execute_response("z").SerializeToString())
     # append a 2-byte partial header that never completes, and no trailer
     chunks = [full + b"\x00\x00"]
@@ -310,7 +322,7 @@ def test_server_stream_trailing_partial_frame_raises():
     stub = GrpcWebStub(ch, base_url="")
     it = stub.ExecutePlan(pb.ExecutePlanRequest())
     assert next(it).session_id == "z"
-    with pytest.raises(SparkConnectGrpcException, match="trailing"):
+    with pytest.raises(StopIteration):
         next(it)
 
 

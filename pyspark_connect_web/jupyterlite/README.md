@@ -60,12 +60,69 @@ class H(http.server.SimpleHTTPRequestHandler):
 http.server.test(HandlerClass=H, port=8000)
 ```
 
+## How the bridge is wired into the JupyterLite kernel (no fork)
+
+The pyodide kernel (`@jupyterlite/pyodide-kernel`) runs Pyodide in **its own**
+ES-module Web Worker; we cannot replace it. We integrate non-invasively, in two
+halves:
+
+- **Page side — `pcw_kernel_bridge.js`.** Loaded *before* the JupyterLite app
+  bundle (see "Load order" below), it wraps the global `Worker` constructor so
+  every kernel worker the app spawns gets a `Bridge` (from `../worker/bridge.js`)
+  attached. The Bridge does the real cross-origin `fetch` and writes response
+  windows back into the SAB. It reacts only to our namespaced envelope
+  `{__pcw__:{...}}` and ignores the kernel's own message framing (comlink /
+  coincident), so the two coexist.
+
+- **Worker side — `pyspark_connect_web.worker.kernel_bootstrap`.** Imported once
+  inside the kernel (the demo's `import pyspark_connect_web; pcw.install()` is
+  enough). `SabSyncChannel` auto-detects it is in a kernel worker (Pyodide, no
+  `js.__pcw_register_sab` hook) and uses `transport="kernel"`: it allocates the
+  SAB, posts `{__pcw__:{type:"sab",...}}` once and `{__pcw__:{type:"rpc"}}` per
+  request, then parks on `Atomics.wait`. No notebook code beyond `pcw.install()`.
+
+When the page is cross-origin isolated the kernel already uses **coincident**
+(itself SAB+Atomics-based), so `SharedArrayBuffer` is available in the worker and
+our allocation just works alongside it.
+
+### Load order
+
+`pcw_kernel_bridge.js` (and, on header-less hosts, `coi-serviceworker.js`) MUST
+run before JupyterLite reads `Worker` off the global scope. Inject them as
+`<script>` tags in the JupyterLite `index.html` template head, *before* the app
+bundle. With the CLI, place an `index.template.html` (or use
+`--apps`/`jupyter_lite_config.json` to add the scripts) so the build emits:
+
+```html
+<head>
+  <script src="./coi-serviceworker.js"></script>     <!-- header-less hosts only -->
+  <script type="module" src="./pcw_kernel_bridge.js"></script>
+  <!-- JupyterLite app bundle loads after these -->
+</head>
+```
+
+## Hosting matrix — which host needs what
+
+| Host | Can set headers? | What to do |
+|---|---|---|
+| Lane 5 Envoy / `docker compose` (local e2e) | yes | Serves COOP/COEP directly (`deploy/`). Nothing extra. |
+| Netlify / Cloudflare Pages | yes (via `_headers`) | Ship `_headers` (already provided). No service worker needed. |
+| **GitHub Pages** | **no** | **Use `coi-serviceworker.js`** — include it as a `<script>` before everything; it injects COOP/COEP via a service worker and reloads once so `crossOriginIsolated` becomes true. |
+| `python -m http.server` (dev) | no | Use the `serve_coi.py` snippet above, or `coi-serviceworker.js`. |
+
+**COEP caveat (all isolated hosts):** `require-corp` blocks any *cross-origin*
+subresource that lacks CORP/CORS headers. The CDN Pyodide build and the wheel
+must be CORS-enabled or hosted same-origin. jsDelivr (the default `pyodideUrl`)
+sends permissive CORS, so it works; if you self-host, copy `pyodide` + the wheel
+into the site root and point `pyodideUrl`/`PCW_WHEEL_URL` at them.
+
 ## Open coordination points
 
-- **Wheel URL**: `worker_bootstrap.js` reads `self.PCW_WHEEL_URL`; the lite build
-  serves the wheel from the site root. The JupyterLite pyodide kernel runs its
-  *own* worker — integrating our SAB bridge into that kernel (vs. the standalone
-  `worker_bootstrap.js` harness) is the open item flagged in
-  `team/findings-lane3-bridge.md`.
+- **Wheel URL**: `worker_bootstrap.js` reads `self.PCW_WHEEL_URL` (standalone
+  harness). Inside JupyterLite the wheel is `micropip.install`-ed from the site
+  root by the demo notebook; the lite build serves it there.
 - **Endpoint**: the demo uses `sc://localhost:8081/;transport=grpcweb` (lane 5's
-  Envoy). CORS on Envoy must allow the lite origin.
+  Envoy). CORS on Envoy must allow the lite origin (lane 5 owns that).
+- **Real-browser validation**: the kernel `Worker`-wrap + SAB handshake +
+  `crossOriginIsolated` can only be confirmed in a cross-origin-isolated browser
+  with lane 5's stack up — see `team/findings-lane3-bridge.md` "needs a browser".

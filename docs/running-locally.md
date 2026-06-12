@@ -2,6 +2,9 @@
 
 # Running it locally
 
+> Unofficial personal project — not affiliated with or endorsed by the Apache
+> Software Foundation. "Apache Spark" and "PySpark" are trademarks of the ASF.
+
 End-to-end local setup: a Spark Connect server, the Envoy grpc-web proxy, the
 JupyterLite site, the reference generator, and the e2e harness.
 

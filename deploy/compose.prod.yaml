@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# PRODUCTION docker-compose OVERLAY for pyspark-connect-web (lane 5).
+#
+# Use this as a compose override on top of the dev compose:
+#
+#   docker compose -f deploy/compose.yaml -f deploy/compose.prod.yaml up -d
+#
+# What it changes vs deploy/compose.yaml (the dev base):
+#   * envoy uses the HARDENED config (deploy/envoy.prod.yaml): TLS, tight CORS,
+#     bearer-token gate, size limits, health/ready endpoints.
+#   * envoy publishes TLS ports 8443 (grpc-web) / 8444 (static) and 8089 (probe)
+#     instead of the dev 8081/8000; admin (:9901) is NOT published.
+#   * a ./certs dir is bind-mounted read-only into the proxy for the TLS cert.
+#   * spark-connect's gRPC port is NO LONGER published to the host — in prod the
+#     Connect server is private; only the proxy is public. (The dev base maps
+#     15002:15002 for the native reference generator; we drop that mapping here.)
+#
+# BEFORE bringing this up:
+#   1. Provide a TLS cert: deploy/certs/tls.crt + deploy/certs/tls.key
+#      (see deploy/README.md "TLS / cert mounting"). For a quick self-signed cert
+#      for staging: scripts/gen_dev_cert.sh.
+#   2. Replace the placeholder origins/hosts in deploy/envoy.prod.yaml
+#      (YOUR-PUBLIC-HOST / YOUR-LITE-ORIGIN), or render them from env with
+#      scripts/render_envoy_prod.sh.
+#   3. Put real auth in front (jwt_authn / ext_authz) — the shipped Lua gate only
+#      rejects requests with no Bearer token; it does not validate it.
+
+services:
+  spark-connect:
+    # In prod the Connect server is private. Drop the host port mapping that the
+    # dev base adds. (Compose merges lists by replacement for `ports` only when
+    # re-declared; we set it empty to unpublish.)
+    ports: []
+
+  envoy:
+    command: ["-c", "/etc/envoy/envoy.prod.yaml", "--service-cluster", "pcw-envoy-prod"]
+    volumes:
+      - ./envoy.prod.yaml:/etc/envoy/envoy.prod.yaml:ro
+      - ./certs:/etc/envoy/certs:ro
+    ports:
+      - "8443:8443"   # grpc-web over TLS  (client: sc://YOUR-HOST:8443/;transport=grpcweb, use https)
+      - "8444:8444"   # JupyterLite static site over TLS (COOP/COEP)
+      - "8089:8089"   # health/readiness probe target (LB / k8s only)
+      # NOTE: :9901 admin intentionally NOT published in prod.

@@ -28,6 +28,24 @@ Two backends, selected at runtime:
 Both backends speak the same small synchronous protocol so the channel logic
 (framing of the request, streaming chunk reassembly, timeout handling) is shared
 and tested once.
+
+Large results / dynamic buffer sizing
+-------------------------------------
+The data SAB has a fixed capacity (default 16 MiB) and cannot be resized
+in place (``SharedArrayBuffer.grow`` requires a growable buffer + re-sharing,
+which is racy across an already-blocked worker). Instead the response side uses
+**bounded-window transfer**: the main thread writes ``min(remaining, capacity)``
+bytes per ``RESP_CHUNK``, marks ``meta.more`` while bytes remain, and the worker
+acknowledges each window (the existing CHUNK_ACK ping-pong) and reassembles. A
+single logical payload — a unary body, or one server-stream chunk — that exceeds
+the data region is therefore delivered across several windows with no realloc.
+
+A *realloc* negotiation is also supported for the rare case where the host wants
+to enlarge the buffer for throughput (e.g. a known-huge result): the worker can
+allocate a larger data SAB and hand it to the main thread via the
+``__pcw_register_sab`` hook before the next RPC. The windowing path is the
+correctness guarantee; realloc is a throughput optimisation layered on top. See
+``_reassemble_windows`` / ``_grow_data_sab``.
 """
 from __future__ import annotations
 
@@ -46,11 +64,22 @@ class TransportError(RuntimeError):
     This is *not* a gRPC-status error — those are carried in the response body's
     trailer frame and are lane 1's concern. This is a hard transport failure
     (network error, main thread gone, SAB protocol violation, isolation missing).
+
+    Lane 1 (``GrpcWebStub``) lets this propagate; PySpark surfaces it as the
+    cause of a failed ``.collect()``. For HTTP-level failures we still hand lane
+    1 a valid :class:`HttpResponse` (with the non-200 ``status`` and any
+    ``grpc-status`` headers) so it can raise the *correct*
+    ``SparkConnectGrpcException`` rather than an opaque transport error — see
+    :meth:`_AtomicsBackend.unary`.
     """
 
 
 class TransportTimeout(TransportError):
     """The blocking wait exceeded the caller-supplied ``timeout`` (seconds)."""
+
+
+class TransportAborted(TransportError):
+    """The fetch was aborted (client abort / navigation / explicit cancel)."""
 
 
 # --------------------------------------------------------------------------- #
@@ -197,52 +226,16 @@ class SabSyncChannel:
 
 
 # --------------------------------------------------------------------------- #
-# Pyodide backend: the SharedArrayBuffer + Atomics.wait dance
+# Protocol constants (single source of truth, mirrored by value in bridge.js
+# and worker_bootstrap.js — see team/findings-lane3-bridge.md).
 # --------------------------------------------------------------------------- #
-#
-# SAB layout (mirrors bridge.js / worker_bootstrap.js — see
-# team/findings-lane3-bridge.md for the authoritative spec). Two buffers:
-#
-#   control_sab : Int32Array, fixed small size. Indices:
-#       [0] STATE   — handshake flag the worker Atomics.wait()s on
-#       [1] LENGTH  — byte length of the current data-region payload
-#       [2] STATUS  — HTTP status (unary) or stream sentinel
-#       [3] SEQ     — monotonically increasing chunk sequence (streaming)
-#       [4] GEN     — request generation (guards against stale wakeups)
-#
-#   data_sab    : Uint8Array, large (default 16 MiB). Carries, in order:
-#       request out:  [u32 header_len][header json][u32 body_len][body bytes]
-#       response in:  [u32 meta_len][meta json][payload bytes]
-#
-# STATE values (Atomics handshake):
-#   0 IDLE          worker owns the buffer; may write a request
-#   1 REQ_READY     worker -> main: request written, please fetch
-#   2 RESP_CHUNK    main -> worker: a chunk/full response is in the data region
-#   3 RESP_END      main -> worker: stream finished (no payload)
-#   4 RESP_ERROR    main -> worker: transport error; meta json has {message}
-#
-# Handshake (unary):
-#   worker: write request, Atomics.store(STATE, REQ_READY), Atomics.notify,
-#           postMessage({}), then Atomics.wait(STATE, REQ_READY).
-#   main:   fetch, write meta+body, store STATUS+LENGTH,
-#           Atomics.store(STATE, RESP_CHUNK), Atomics.notify.
-#   worker: wakes, reads, store(STATE, IDLE).
-#
-# Handshake (server stream): same start; main loops reader.read(), and for each
-#   chunk writes payload, store(STATE, RESP_CHUNK), notify; worker copies the
-#   chunk, stores STATE back to a "consumed" value (we reuse REQ_READY as the
-#   "ready for next chunk" ack) and waits again. At EOS main stores RESP_END.
-#
-# This is the riskiest seam; the Python side below is written so the *protocol
-# constants* are the single source of truth shared with the JS files by value.
-# --------------------------------------------------------------------------- #
-
 # Control array indices
 _C_STATE = 0
 _C_LENGTH = 1
 _C_STATUS = 2
 _C_SEQ = 3
 _C_GEN = 4
+_C_CAP = 5  # current data-SAB capacity in bytes (set by worker after alloc)
 _CONTROL_SLOTS = 8  # round up; leaves room for future fields
 
 # STATE values
@@ -251,11 +244,19 @@ _S_REQ_READY = 1
 _S_RESP_CHUNK = 2
 _S_RESP_END = 3
 _S_RESP_ERROR = 4
-
-# ack value the worker writes to request the *next* streaming chunk
+# ack value the worker writes to request the *next* window/chunk
 _S_CHUNK_ACK = 5
+# main -> worker: the next logical payload needs more capacity than we have; the
+# worker may grow the data SAB and re-announce it, then ack. (Optional path; the
+# windowing path below works without it.)
+_S_REALLOC_REQ = 6
 
 _DEFAULT_DATA_BYTES = 16 * 1024 * 1024  # 16 MiB payload region
+
+# Reserve a fixed header zone at the front of the data region for the response
+# meta JSON, so a window's *payload* capacity is deterministic regardless of how
+# large the meta happens to be. 4 KiB is ample for ``{"more":..,"status":..}``.
+_META_ZONE = 4096
 
 
 class _AtomicsBackend:
@@ -265,11 +266,18 @@ class _AtomicsBackend:
     The heavy lifting (allocating SABs, performing fetch, framing the response)
     is split between this class and ``bridge.js`` / ``worker_bootstrap.js``. This
     class owns: writing the request into the data region, the ``Atomics.wait``
-    blocking loop, and reassembling streamed chunks into the iterator lane 1
-    consumes. ``bridge.js`` owns: fetch + writing responses back.
+    blocking loop, **reassembling windowed payloads**, and turning streamed
+    chunks into the iterator lane 1 consumes. ``bridge.js`` owns: fetch + writing
+    response windows back.
     """
 
-    def __init__(self, base_url: str, *, sab: Optional[tuple] = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        sab: Optional[tuple] = None,
+        transport: str = "auto",
+    ) -> None:
         # Imported here, not at module top, so CPython/test imports never hit it.
         import js  # noqa: F401
         import json
@@ -277,6 +285,18 @@ class _AtomicsBackend:
         self._js = js
         self._json = json
         self._base_url = base_url
+        # How we announce the SAB to the main thread and nudge it per RPC:
+        #   "standalone": worker_bootstrap.js harness — js.__pcw_register_sab +
+        #                 postMessage({type:"pcw_rpc"}).
+        #   "kernel":     JupyterLite pyodide kernel worker — post a namespaced
+        #                 envelope postMessage({__pcw__:{type:"sab"|"rpc",...}})
+        #                 so the kernel's comlink/coincident framing ignores it
+        #                 and pcw_kernel_bridge.js (page side) picks it up.
+        #   "auto":       "standalone" if js.__pcw_register_sab exists, else
+        #                 "kernel" (the kernel worker has no such hook).
+        if transport == "auto":
+            transport = "standalone" if hasattr(js, "__pcw_register_sab") else "kernel"
+        self._transport = transport
 
         if not getattr(js, "crossOriginIsolated", False):
             # DECISIONS.md #4: SAB requires COOP/COEP. Fail loudly and early —
@@ -297,15 +317,31 @@ class _AtomicsBackend:
             data_sab = js.SharedArrayBuffer.new(_DEFAULT_DATA_BYTES)
 
         self._control_sab = control_sab
-        self._data_sab = data_sab
         self._ctrl = js.Int32Array.new(control_sab)
-        self._data = js.Uint8Array.new(data_sab)
         self._gen = 0
+        self._attach_data(data_sab)
 
-        # Hand the SABs to the main thread once so bridge.js can attach views.
-        # worker_bootstrap.js wires postMessage; we just announce them.
-        if hasattr(js, "__pcw_register_sab"):
-            js.__pcw_register_sab(control_sab, data_sab)
+    def _attach_data(self, data_sab) -> None:
+        """(Re)bind the data SAB views and publish its capacity to the control
+        word so the main thread (bridge.js) knows the window size to use."""
+        self._data_sab = data_sab
+        self._data = self._js.Uint8Array.new(data_sab)
+        self._capacity = int(data_sab.byteLength)
+        self._js.Atomics.store(self._ctrl, _C_CAP, self._capacity)
+        # Announce to the main thread so the page-side Bridge attaches the same
+        # buffer. The mechanism differs by transport (see __init__).
+        if self._transport == "kernel":
+            self._js.postMessage(
+                {
+                    "__pcw__": {
+                        "type": "sab",
+                        "control": self._control_sab,
+                        "data": data_sab,
+                    }
+                }
+            )
+        elif hasattr(self._js, "__pcw_register_sab"):
+            self._js.__pcw_register_sab(self._control_sab, data_sab)
 
     # -- request marshalling ------------------------------------------------- #
     def _write_request(self, request: dict) -> None:
@@ -320,6 +356,13 @@ class _AtomicsBackend:
         header_bytes = self._json.dumps(header).encode("utf-8")
         body = request["body"]
 
+        # A request larger than the data region is not supported by windowing on
+        # the *request* side (the main thread reads it in one shot before fetch).
+        # Grow if needed so even a big createDataFrame LocalRelation goes through.
+        needed = 4 + len(header_bytes) + 4 + len(body)
+        if needed > self._capacity:
+            self._grow_data_sab(needed)
+
         off = 0
         off = self._put_u32(off, len(header_bytes))
         off = self._put_bytes(off, header_bytes)
@@ -331,9 +374,22 @@ class _AtomicsBackend:
         Atomics.store(self._ctrl, _C_SEQ, 0)
         Atomics.store(self._ctrl, _C_STATE, _S_REQ_READY)
         Atomics.notify(self._ctrl, _C_STATE)
-        # Nudge the main thread (it cannot Atomics.wait): a 0-length message is
-        # enough; bridge.js reads everything from the SAB.
-        self._js.postMessage({"type": "pcw_rpc"})
+        # Nudge the main thread (it cannot Atomics.wait): the message carries no
+        # data; the Bridge reads everything from the SAB. The envelope shape
+        # differs by transport so the kernel's own message framing ignores ours.
+        if self._transport == "kernel":
+            self._js.postMessage({"__pcw__": {"type": "rpc"}})
+        else:
+            self._js.postMessage({"type": "pcw_rpc"})
+
+    def _grow_data_sab(self, min_bytes: int) -> None:
+        """Allocate a larger data SAB (next power-of-two >= ``min_bytes``) and
+        re-announce it. Safe to call only when the worker owns the buffer
+        (STATE == IDLE, i.e. between RPCs / before writing a request)."""
+        new_cap = self._capacity
+        while new_cap < min_bytes:
+            new_cap *= 2
+        self._attach_data(self._js.SharedArrayBuffer.new(new_cap))
 
     def _put_u32(self, off: int, value: int) -> int:
         self._data[off + 0] = value & 0xFF
@@ -355,14 +411,57 @@ class _AtomicsBackend:
         self._data.set(self._js.Uint8Array.new(list(b)), off)
         return off + len(b)
 
-    def _read_payload(self) -> bytes:
+    # -- response window reading -------------------------------------------- #
+    def _read_window(self) -> tuple[dict, bytes]:
+        """Read one response window: parse its meta JSON + payload bytes.
+
+        Wire layout per window (main -> worker), written by bridge.js:
+            [u32 meta_len][meta json][payload bytes]
+        ``meta`` may carry ``{"more": bool}`` when the logical payload spans
+        multiple windows. ``length`` (C_LENGTH) is the total valid byte count.
+        """
         length = self._js.Atomics.load(self._ctrl, _C_LENGTH)
-        # Read meta_len + meta json + payload from the data region.
         meta_len, off = self._get_u32(0)
-        # meta json currently unused by the channel beyond status; skip it.
+        meta_raw = bytes(self._data.subarray(off, off + meta_len).to_py())
         off += meta_len
+        meta = self._json.loads(meta_raw.decode("utf-8")) if meta_len else {}
         payload = bytes(self._data.subarray(off, off + (length - off)).to_py())
-        return payload
+        return meta, payload
+
+    def _reassemble_windows(self, timeout: float | None) -> tuple[dict, bytes]:
+        """Read one *logical* payload that may span several windows.
+
+        The worker is woken on the first ``RESP_CHUNK`` (the caller has already
+        waited for it). For each window: read it, and if ``meta.more`` is set,
+        ack (CHUNK_ACK) and wait for the next window; otherwise stop. This is how
+        a single response larger than the data SAB is delivered without realloc.
+
+        Returns ``(first_meta, joined_payload)`` — the *first* window's meta (it
+        carries ``headers``/``status`` context; continuation windows only carry
+        ``{"more": ...}``).
+        """
+        Atomics = self._js.Atomics
+        parts: list[bytes] = []
+        first_meta: dict = {}
+        first = True
+        while True:
+            meta, payload = self._read_window()
+            if first:
+                first_meta = meta
+                first = False
+            parts.append(payload)
+            if not meta.get("more"):
+                return first_meta, b"".join(parts)
+            # Request the next window of the same logical payload.
+            Atomics.store(self._ctrl, _C_STATE, _S_CHUNK_ACK)
+            Atomics.notify(self._ctrl, _C_STATE)
+            state = self._wait(_S_CHUNK_ACK, timeout)
+            if state == _S_RESP_ERROR:
+                raise self._error_from_meta()
+            if state != _S_RESP_CHUNK:
+                raise TransportError(
+                    f"unexpected SAB state {state} while reassembling windows"
+                )
 
     # -- blocking wait ------------------------------------------------------- #
     def _wait(self, expect_from: int, timeout: float | None) -> int:
@@ -391,12 +490,20 @@ class _AtomicsBackend:
         state = self._wait(_S_REQ_READY, request.get("timeout"))
         try:
             if state == _S_RESP_ERROR:
-                raise TransportError(self._read_error())
+                raise self._error_from_meta()
             if state not in (_S_RESP_CHUNK, _S_RESP_END):
                 raise TransportError(f"unexpected SAB state {state} for unary")
             status = self._js.Atomics.load(self._ctrl, _C_STATUS)
-            body = self._read_payload() if state == _S_RESP_CHUNK else b""
-            return HttpResponse(status=status, headers={}, body=body)
+            if state == _S_RESP_CHUNK:
+                # First window already present; reassemble across windows.
+                meta_first, body = self._reassemble_windows(request.get("timeout"))
+                headers = dict(meta_first.get("headers") or {})
+            else:
+                body, headers = b"", {}
+            # HTTP errors (status >= 400) are NOT a transport failure — hand lane
+            # 1 a valid HttpResponse with the status + any grpc-status headers so
+            # it raises the right SparkConnectGrpcException (API_CONTRACT.md §1).
+            return HttpResponse(status=status, headers=headers, body=body)
         finally:
             self._js.Atomics.store(self._ctrl, _C_STATE, _S_IDLE)
             self._js.Atomics.notify(self._ctrl, _C_STATE)
@@ -407,9 +514,8 @@ class _AtomicsBackend:
         self._write_request(request)
         Atomics = self._js.Atomics
         # The worker and main thread ping-pong STATE. After the request the
-        # worker is parked on REQ_READY; for every subsequent chunk it parks on
-        # CHUNK_ACK (the value it itself wrote to request the next chunk). The
-        # state bridge.js moves us *off of* therefore alternates.
+        # worker is parked on REQ_READY; for every subsequent chunk/window it
+        # parks on CHUNK_ACK (the value it itself wrote to request the next one).
         wait_on = _S_REQ_READY
         try:
             while True:
@@ -417,10 +523,13 @@ class _AtomicsBackend:
                 if state == _S_RESP_END:
                     return
                 if state == _S_RESP_ERROR:
-                    raise TransportError(self._read_error())
+                    raise self._error_from_meta()
                 if state != _S_RESP_CHUNK:
                     raise TransportError(f"unexpected SAB state {state} in stream")
-                chunk = self._read_payload()
+                # One stream chunk may itself be windowed if it exceeds the data
+                # region; reassemble before yielding so lane 1 always sees whole
+                # off-the-wire chunks (it re-frames them downstream).
+                _meta, chunk = self._reassemble_windows(timeout)
                 yield chunk
                 # Ack: request the next chunk, then park on CHUNK_ACK.
                 Atomics.store(self._ctrl, _C_STATE, _S_CHUNK_ACK)
@@ -431,15 +540,27 @@ class _AtomicsBackend:
             Atomics.store(self._ctrl, _C_STATE, _S_IDLE)
             Atomics.notify(self._ctrl, _C_STATE)
 
-    def _read_error(self) -> str:
+    # -- error mapping ------------------------------------------------------- #
+    def _error_from_meta(self) -> TransportError:
+        """Build the right exception type from the error meta the main thread
+        wrote. ``meta.kind`` distinguishes timeout/abort/generic so PySpark sees
+        a meaningful cause."""
+        meta = {}
         try:
-            length = self._js.Atomics.load(self._ctrl, _C_LENGTH)
             meta_len, off = self._get_u32(0)
-            meta = bytes(self._data.subarray(off, off + meta_len).to_py())
-            obj = self._json.loads(meta.decode("utf-8"))
-            return str(obj.get("message", "transport error"))
+            raw = bytes(self._data.subarray(off, off + meta_len).to_py())
+            meta = self._json.loads(raw.decode("utf-8")) if meta_len else {}
         except Exception:
-            return "transport error (and failed to read error detail from SAB)"
+            return TransportError(
+                "transport error (and failed to read error detail from SAB)"
+            )
+        message = str(meta.get("message", "transport error"))
+        kind = meta.get("kind")
+        if kind == "timeout":
+            return TransportTimeout(message)
+        if kind == "abort":
+            return TransportAborted(message)
+        return TransportError(message)
 
 
 # Convenience for callers that want a no-arg factory in the worker.
@@ -453,6 +574,7 @@ __all__ = [
     "SyncBackend",
     "TransportError",
     "TransportTimeout",
+    "TransportAborted",
     "is_pyodide",
     "make_channel",
 ]

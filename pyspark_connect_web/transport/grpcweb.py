@@ -343,7 +343,25 @@ class GrpcWebStub:
         chunk may contain several frames, a single frame, or split a frame
         across a boundary. We buffer until we have whole frames, decode message
         frames into protos, and on the trailer frame validate grpc-status,
-        raising on a non-OK status (or on a stream that ends with no trailer).
+        raising on a non-OK status.
+
+        **Dropped-stream recovery (DECISIONS.md #6).** A stream that ends with
+        *no trailer frame* (or with a trailing partial frame) is a broken
+        connection mid-result. We must NOT raise here: PySpark's
+        ``ExecutePlanResponseReattachableIterator`` only recovers a broken stream
+        when the underlying iterator ends *cleanly* (``StopIteration``) before a
+        ``ResultComplete`` response — that is what makes it issue
+        ``ReattachExecute`` from the last ``response_id``. Its retry path, by
+        contrast, only retries ``grpc.RpcError`` (UNAVAILABLE / INTERNAL+
+        INVALID_CURSOR), which our :class:`SparkConnectGrpcException` is not — so
+        raising here would surface the drop to the user instead of recovering it.
+        Therefore on a trailer-less end we simply *return* (StopIteration) and let
+        the reattach machinery refetch the rest. Verified end-to-end by the
+        integration fault-injection test
+        (``tests/integration/test_real_round_trip.py::test_midstream_disconnect_recovers_via_reattach``).
+
+        We DO still raise on a present-but-non-OK trailer (a real server error)
+        and on a compressed frame (unsupported).
         """
         buffer = bytearray()
         saw_trailer = False
@@ -370,16 +388,12 @@ class GrpcWebStub:
                 else:
                     yield response_cls.FromString(frame.payload)
 
-        if buffer:
-            raise SparkConnectGrpcException(
-                f"grpc-web: stream for {path} ended with {len(buffer)} "
-                f"trailing byte(s) (incomplete frame)"
-            )
         if not saw_trailer:
-            raise SparkConnectGrpcException(
-                f"grpc-web: stream for {path} ended without a trailer frame "
-                f"(connection dropped). ReattachExecute should be used to recover."
-            )
+            # Broken stream (no terminating trailer; a trailing partial frame in
+            # ``buffer`` means the same thing — the connection was cut mid-frame).
+            # End the iterator cleanly so the reattachable iterator recovers via
+            # ReattachExecute. See the method docstring for why we must not raise.
+            return
         _raise_for_trailers(trailers, path=path)
 
     @staticmethod

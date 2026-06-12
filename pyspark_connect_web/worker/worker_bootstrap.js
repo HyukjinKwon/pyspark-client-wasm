@@ -70,10 +70,13 @@ async function boot() {
   self.__pcw_control_sab = controlSab;
   self.__pcw_data_sab = dataSab;
   self.__pcw_register_sab = function (c, d) {
-    // No-op on the worker side: the main thread already has them from pcw_sab.
-    // Present so _AtomicsBackend's optional hook call succeeds.
+    // Called by _AtomicsBackend whenever it (re)binds the data SAB — including a
+    // realloc to a larger buffer for a big result. Re-announce to the main
+    // thread so bridge.js attaches the *new* buffer before the next RPC. The
+    // worker is between RPCs (STATE == IDLE) when this fires, so it is safe.
     self.__pcw_control_sab = c;
     self.__pcw_data_sab = d;
+    self.postMessage({ type: "pcw_sab", control: c, data: d });
   };
 
   // Bridge Python's print/stderr if desired; minimal here.

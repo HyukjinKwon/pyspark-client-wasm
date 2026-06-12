@@ -2,6 +2,18 @@
 
 # pyspark-connect-web — PySpark in JupyterLite
 
+> **Unofficial personal project.** Not affiliated with, sponsored by, or endorsed
+> by the Apache Software Foundation. "Apache Spark", "Spark", and "PySpark" are
+> trademarks of the Apache Software Foundation, used here only to describe
+> interoperability. This project is an independent client; it is not an Apache
+> project and does not represent the ASF.
+>
+> **Name note:** the **import / package name** is `pyspark_connect_web`
+> (distribution name `pyspark-connect-web`). The **repository** name is still
+> being decided by the maintainer and may differ from the package name — code and
+> docs refer to the package, not the repo. The package name does not imply any
+> ASF endorsement (see the trademark notice above).
+
 Run the **real** PySpark Connect Python client inside a browser
 (JupyterLite/Pyodide), talking to a Spark Connect server through a grpc-web
 transport. Your existing PySpark code runs unchanged — no reimplementation, no
@@ -62,6 +74,25 @@ blocking bridge cannot work.
 Full walkthrough (reference generation, e2e, troubleshooting):
 [`docs/running-locally.md`](docs/running-locally.md). Architecture:
 [`docs/architecture.md`](docs/architecture.md).
+
+## Production & security
+
+For anything past localhost, do **not** use the dev compose as-is (it is
+plaintext, has wildcard CORS, and no auth). Use the hardened overlay:
+
+```bash
+# provide a TLS cert (deploy/certs/), set your origins, then:
+docker compose -f deploy/compose.yaml -f deploy/compose.prod.yaml up -d
+# or: make up-prod
+```
+
+* **Hardened proxy** (TLS, tight CORS, bearer-token gate, size limits,
+  health/readiness): [`deploy/envoy.prod.yaml`](deploy/envoy.prod.yaml) +
+  [`deploy/README.md`](deploy/README.md).
+* **Build & release** (wheel, micropip install, JupyterLite site, checklist):
+  [`docs/packaging-release.md`](docs/packaging-release.md).
+* **Security review** (cross-origin isolation, CORS, auth, untrusted server,
+  notebook XSS — threats + mitigations): [`docs/security.md`](docs/security.md).
 
 ## Status
 Early development. The server side (`deploy/`) and the e2e scaffold

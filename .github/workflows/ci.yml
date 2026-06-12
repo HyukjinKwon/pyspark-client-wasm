@@ -1,16 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# CI for pyspark-connect-web (lane 5 owns this sketch).
+# CI for pyspark-connect-web (lane 5 owns this).
 #
 # Jobs:
-#   * unit            — pytest (transport stubbed; no browser, no grpcio)
-#   * grpcio-guard    — fails if grpcio is imported anywhere under
-#                       pyspark_connect_web/ (DECISIONS.md #1)
-#   * headers-guard   — fails if deploy config is missing the mandatory
-#                       cross-origin-isolation headers (DECISIONS.md #4)
+#   * unit          — pytest across a Python matrix (transport stubbed; no
+#                     browser, no grpcio)
+#   * lint          — ruff check + format --check
+#   * grpcio-guard  — fails if grpcio is imported anywhere under
+#                     pyspark_connect_web/ (DECISIONS.md #1), package-scoped
+#   * headers-guard — fails if deploy config drops the mandatory COOP/COEP
+#                     headers, or if prod CORS regresses to a wildcard
+#                     (DECISIONS.md #4); runs scripts/validate_deploy.py
+#   * build-wheel   — builds the wheel and asserts it imports + carries no
+#                     grpcio dependency
 #
 # The e2e job is intentionally NOT a required gate yet: the browser stack
-# (lanes 1–4 + JupyterLite build) is not runnable, so e2e would skip. A
+# (lanes 1–4 + JupyterLite build) is not runnable in CI, so e2e would skip. A
 # commented sketch is included at the bottom to flip on once the stack lands.
 
 name: ci
@@ -22,21 +27,45 @@ on:
 
 jobs:
   unit:
-    name: unit tests (pytest)
+    name: unit tests (pytest, py ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: pytest
+        # Only collect unit tests; tests/e2e is Playwright/TS + a native-only
+        # reference generator that needs a live Spark Connect server.
+        run: pytest -q --ignore=tests/e2e
+
+  lint:
+    name: lint + format (ruff)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-      - name: pytest
-        # Only collect unit tests; the e2e dir is Playwright/TS + a native-only
-        # reference generator that needs a live Spark Connect server.
-        run: pytest -q --ignore=tests/e2e
+      - name: install ruff
+        run: pip install ruff==0.6.9
+      # Scoped to lane-5-owned Python (scripts/ + the e2e reference generator).
+      # Whole-repo lint is intentionally NOT enabled yet: pyspark_connect_web/
+      # (lanes 1–4) has a couple of pre-existing ruff findings that lane 5 does
+      # not own and must not edit. Flip the paths to `.` once those are clean and
+      # the integrator lands a [tool.ruff] config in pyproject.toml.
+      - name: ruff check
+        run: ruff check scripts/ tests/e2e/reference.py
+      - name: ruff format --check
+        run: ruff format --check scripts/ tests/e2e/reference.py
 
   grpcio-guard:
     name: no grpcio under pyspark_connect_web/ (DECISIONS.md #1)
@@ -57,42 +86,69 @@ jobs:
           echo "OK: no grpcio imports in pyspark_connect_web/"
 
   headers-guard:
-    name: COOP/COEP present in deploy config (DECISIONS.md #4)
+    name: COOP/COEP + tight prod CORS in deploy config (DECISIONS.md #4)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: assert cross-origin isolation headers
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install pyyaml
+        run: pip install pyyaml
+      - name: validate deploy configs
+        # Parses every Envoy/compose YAML, asserts COOP/COEP present in dev AND
+        # prod, and that prod CORS has no wildcard origin.
+        run: python scripts/validate_deploy.py
+
+  build-wheel:
+    name: build wheel + assert importable / no grpcio
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: build
+        run: |
+          python -m pip install --upgrade pip
+          pip install build==1.2.2
+          python -m build --wheel --outdir dist
+      - name: install + import the wheel
         run: |
           set -euo pipefail
-          cfg=deploy/envoy.yaml
-          test -f "$cfg" || { echo "::error::$cfg missing"; exit 1; }
-          grep -q 'Cross-Origin-Opener-Policy' "$cfg" \
-            || { echo "::error::missing Cross-Origin-Opener-Policy in $cfg"; exit 1; }
-          grep -q 'same-origin' "$cfg" \
-            || { echo "::error::COOP value should be same-origin in $cfg"; exit 1; }
-          grep -q 'Cross-Origin-Embedder-Policy' "$cfg" \
-            || { echo "::error::missing Cross-Origin-Embedder-Policy in $cfg"; exit 1; }
-          grep -q 'require-corp' "$cfg" \
-            || { echo "::error::COEP value should be require-corp in $cfg"; exit 1; }
-          echo "OK: COOP/COEP present in $cfg"
+          pip install dist/pyspark_connect_web-*.whl
+          python -c "import pyspark_connect_web; print('import OK', pyspark_connect_web.__name__)"
+      - name: assert wheel declares no grpcio dependency
+        run: |
+          python - <<'PY'
+          import importlib.metadata as m
+          reqs = m.requires("pyspark-connect-web") or []
+          bad = [r for r in reqs if "grpcio" in r]
+          assert not bad, f"grpcio in wheel requirements: {bad}"
+          print("OK: no grpcio in wheel requirements")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
 
   # ---------------------------------------------------------------------------
   # e2e (DISABLED until the browser stack lands). Uncomment + set
   # E2E_REQUIRE_STACK=1 once lanes 1–4 + the JupyterLite build are runnable.
+  # With the bridge wired, this asserts the full DECISIONS.md "v0 done =" matrix.
   # ---------------------------------------------------------------------------
   # e2e:
   #   name: headless-browser e2e (DECISIONS.md "v0 done =")
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v4
-  #     - name: bring up stack
-  #       run: docker compose -f deploy/compose.yaml up -d
-  #     - uses: actions/setup-python@v5
-  #       with: { python-version: "3.11" }
-  #     - name: reference results
+  #     - name: build site + bring up stack
   #       run: |
   #         pip install -e ".[dev]"
-  #         python tests/e2e/reference.py --remote sc://localhost:15002 --out tests/e2e/reference.json
+  #         scripts/build_site.sh
+  #         docker compose -f deploy/compose.yaml up -d
+  #     - name: reference results
+  #       run: python tests/e2e/reference.py --remote sc://localhost:15002 --out tests/e2e/reference.json
   #     - uses: actions/setup-node@v4
   #       with: { node-version: "20" }
   #     - name: playwright

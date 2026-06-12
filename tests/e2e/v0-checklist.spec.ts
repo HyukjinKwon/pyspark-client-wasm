@@ -2,25 +2,31 @@
 //
 // e2e: the DECISIONS.md "v0 done =" checklist, in a real headless browser.
 //
-// SCAFFOLD STATE
-// --------------
-// The browser stack (lanes 1–4 + lane 3's JupyterLite build) is not runnable
-// yet, so every checklist item below is a real Playwright test with a TODO hook
-// describing exactly what to assert. The suite is safe to run today:
-//   * `beforeAll` probes the stack; if it is DOWN, every test is SKIPPED
-//     (unless E2E_REQUIRE_STACK=1, which turns "down" into a hard failure — the
-//     CI gate to flip once the stack lands).
-//   * items that depend on un-wired helpers are marked test.fixme() so they are
-//     reported as expected-to-fail rather than red. Remove the fixme + fill the
-//     hook as each lane lands.
+// These tests drive lane 3's window.__pcwRunPython(src) bridge
+// (pyspark_connect_web/jupyterlite/run_python_bridge.js) and assert the v0
+// matrix from DECISIONS.md.
 //
-// Mapping to DECISIONS.md:
-//   1. crossOriginIsolated === true               (COOP/COEP, #4)  <-- implementable now
+// SKIP SEMANTICS (graceful degradation):
+//   * beforeAll probes the JupyterLite page. If the stack is DOWN, every test
+//     is skipped — unless E2E_REQUIRE_STACK=1, which turns "down" into a hard
+//     failure (the CI gate to flip once the stack lands).
+//   * The crossOriginIsolated test needs only server headers and runs whenever
+//     the page is up.
+//   * The bridge-dependent tests additionally require window.__pcwRunPython.
+//     If the page is up but the bridge is not wired yet (e.g. the JupyterLite
+//     kernel integration in team/findings-lane3-bridge.md #1 is still pending),
+//     they skip with a clear reason — unless E2E_REQUIRE_STACK=1, where a
+//     missing bridge is a hard failure.
+//
+// Mapping to DECISIONS.md "v0 done =":
+//   1. crossOriginIsolated === true                          (#4)
 //   2. spark.range(10).collect() == 10 rows
-//   3. filter/select/groupBy/agg toPandas == reference (#7 Arrow parity)
+//   3. filter/select/groupBy/agg toPandas == native reference (#7 Arrow parity)
 //   4. createDataFrame(pandas_df) round-trips
 //   5. spark.sql("select 1 as x").collect() works
-//   6. mid-stream disconnect recovers via ReattachExecute  (#6)
+//   6. mid-stream disconnect recovers via ReattachExecute    (#6)
+//
+// Query #3 is kept BYTE-FOR-BYTE in lockstep with tests/e2e/reference.py.
 
 import { test, expect } from "@playwright/test";
 import * as fs from "node:fs";
@@ -29,9 +35,11 @@ import {
   isStackUp,
   requireStack,
   crossOriginIsolated,
+  bridgeAvailable,
   waitForKernel,
   runPython,
   injectMidStreamDisconnect,
+  SPARK_REMOTE,
 } from "./helpers";
 
 const BASE_URL = process.env.E2E_BASE_URL || "http://localhost:8000";
@@ -45,26 +53,52 @@ test.beforeAll(async () => {
   if (!stackUp && requireStack()) {
     throw new Error(
       `E2E_REQUIRE_STACK=1 but the JupyterLite page at ${BASE_URL} is not ` +
-        `reachable. Bring up deploy/compose.yaml and build the JupyterLite site.`,
+        `reachable. Bring up deploy/compose.yaml and build the JupyterLite site ` +
+        `(scripts/build_site.sh).`,
     );
   }
 });
 
 test.beforeEach(async ({ page }, testInfo) => {
   if (!stackUp) {
-    testInfo.skip(true, `stack down at ${BASE_URL}; skipping (set E2E_REQUIRE_STACK=1 to fail)`);
+    testInfo.skip(
+      true,
+      `stack down at ${BASE_URL}; skipping (set E2E_REQUIRE_STACK=1 to fail)`,
+    );
     return;
   }
   await page.goto(BASE_URL);
 });
 
+/**
+ * Gate a bridge-dependent test: skip if window.__pcwRunPython is absent (unless
+ * E2E_REQUIRE_STACK=1), else wait for the kernel to be ready.
+ */
+async function gateBridge(page: import("@playwright/test").Page, testInfo: import("@playwright/test").TestInfo) {
+  const haveBridge = await bridgeAvailable(page);
+  if (!haveBridge) {
+    if (requireStack()) {
+      throw new Error(
+        `E2E_REQUIRE_STACK=1 but window.__pcwRunPython is not present on ${BASE_URL}. ` +
+          `Lane 3's run_python_bridge.js must be wired into the page (see ` +
+          `team/findings-lane3-bridge.md open item #1).`,
+      );
+    }
+    testInfo.skip(
+      true,
+      `window.__pcwRunPython not wired on the page yet; skipping (set ` +
+        `E2E_REQUIRE_STACK=1 to fail). Remote=${SPARK_REMOTE}`,
+    );
+    return false;
+  }
+  await waitForKernel(page);
+  return true;
+}
+
 // ---------------------------------------------------------------------------
-// 1. crossOriginIsolated === true  — implementable today (server headers only)
+// 1. crossOriginIsolated === true  — server headers only (no bridge needed)
 // ---------------------------------------------------------------------------
 test("crossOriginIsolated is true on the JupyterLite page", async ({ page }) => {
-  // This needs no lane wiring: it only checks that Envoy served COOP/COEP and
-  // the browser turned on isolation. If this is false, SharedArrayBuffer (and
-  // therefore the whole blocking bridge) cannot work. DECISIONS.md #4.
   const isolated = await crossOriginIsolated(page);
   expect(
     isolated,
@@ -76,9 +110,8 @@ test("crossOriginIsolated is true on the JupyterLite page", async ({ page }) => 
 // ---------------------------------------------------------------------------
 // 2. spark.range(10).collect() returns 10 rows
 // ---------------------------------------------------------------------------
-test.fixme("spark.range(10).collect() returns 10 rows", async ({ page }) => {
-  await waitForKernel(page);
-  // TODO: snippet should return the row count as JSON.
+test("spark.range(10).collect() returns 10 rows", async ({ page }, testInfo) => {
+  if (!(await gateBridge(page, testInfo))) return;
   const result = (await runPython(
     page,
     `import json; print(json.dumps(len(spark.range(10).collect())))`,
@@ -88,27 +121,29 @@ test.fixme("spark.range(10).collect() returns 10 rows", async ({ page }) => {
 
 // ---------------------------------------------------------------------------
 // 3. filter/select/groupBy/agg toPandas matches the native reference
+//    (DECISIONS.md #7 — byte/row exact vs a native Connect run). The query
+//    MUST match tests/e2e/reference.py::build_reference exactly.
 // ---------------------------------------------------------------------------
-test.fixme("filter/groupBy/agg toPandas matches reference", async ({ page }) => {
-  await waitForKernel(page);
+test("filter/groupBy/agg toPandas matches reference", async ({ page }, testInfo) => {
+  if (!(await gateBridge(page, testInfo))) return;
 
-  // Reference produced by tests/e2e/reference.py against a native Connect client.
   expect(
     fs.existsSync(REFERENCE_PATH),
     `reference results missing at ${REFERENCE_PATH}; run tests/e2e/reference.py`,
   ).toBe(true);
   const reference = JSON.parse(fs.readFileSync(REFERENCE_PATH, "utf-8"));
 
-  // TODO: run the SAME query in the browser and return its toPandas() as
-  // records JSON, so we can compare row-for-row (DECISIONS.md #7 byte/row exact).
   const browserResult = (await runPython(
     page,
     `
 import json
+from pyspark.sql import functions as F
 df = (spark.range(100)
         .filter("id % 2 = 0")
-        .select((spark.range(0).id).alias("id"))  # placeholder; mirror reference.py
-     )
+        .select((F.col("id") % 10).alias("bucket"), F.col("id"))
+        .groupBy("bucket")
+        .agg(F.count("*").alias("n"), F.sum("id").alias("sum_id"))
+        .orderBy("bucket"))
 print(json.dumps(df.toPandas().to_dict(orient="records")))
 `,
   )) as unknown[];
@@ -119,17 +154,15 @@ print(json.dumps(df.toPandas().to_dict(orient="records")))
 // ---------------------------------------------------------------------------
 // 4. createDataFrame(pandas_df) round-trips
 // ---------------------------------------------------------------------------
-test.fixme("createDataFrame(pandas_df) round-trips", async ({ page }) => {
-  await waitForKernel(page);
-  // TODO: build a small pandas DataFrame in-kernel, createDataFrame it, collect
-  // it back, and assert the round-trip equals the input (lane 4 encode path).
+test("createDataFrame(pandas_df) round-trips", async ({ page }, testInfo) => {
+  if (!(await gateBridge(page, testInfo))) return;
   const ok = (await runPython(
     page,
     `
 import json, pandas as pd
 pdf = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
 out = spark.createDataFrame(pdf).toPandas()
-print(json.dumps(out.equals(pdf)))
+print(json.dumps(bool(out.equals(pdf))))
 `,
   )) as boolean;
   expect(ok).toBe(true);
@@ -138,8 +171,8 @@ print(json.dumps(out.equals(pdf)))
 // ---------------------------------------------------------------------------
 // 5. spark.sql("select 1 as x").collect() works
 // ---------------------------------------------------------------------------
-test.fixme("spark.sql round-trips", async ({ page }) => {
-  await waitForKernel(page);
+test("spark.sql round-trips", async ({ page }, testInfo) => {
+  if (!(await gateBridge(page, testInfo))) return;
   const rows = (await runPython(
     page,
     `import json; print(json.dumps([r.asDict() for r in spark.sql("select 1 as x").collect()]))`,
@@ -150,11 +183,12 @@ test.fixme("spark.sql round-trips", async ({ page }) => {
 // ---------------------------------------------------------------------------
 // 6. mid-stream disconnect recovers via ReattachExecute (DECISIONS.md #6)
 // ---------------------------------------------------------------------------
-test.fixme("mid-stream disconnect recovers via ReattachExecute", async ({ page }) => {
-  await waitForKernel(page);
-  // Arrange a query large enough to span multiple response frames, drop the
-  // connection mid-stream, and assert the reattachable iterator recovers and
-  // still returns the full, correct result.
+test("mid-stream disconnect recovers via ReattachExecute", async ({ page }, testInfo) => {
+  if (!(await gateBridge(page, testInfo))) return;
+  // Arm a one-shot abort of the next ExecutePlan stream, then run a query big
+  // enough to span multiple response frames. PySpark's reattachable iterator
+  // must reconnect (ReattachExecute, a different path we do NOT abort) and
+  // still return the full, correct result.
   await injectMidStreamDisconnect(page);
   const count = (await runPython(
     page,

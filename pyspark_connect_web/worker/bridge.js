@@ -96,7 +96,9 @@ class Bridge {
     let off = 0;
     const headerLen = this._getU32(off);
     off += 4;
-    const headerBytes = this.data.subarray(off, off + headerLen);
+    // .slice (not .subarray): TextDecoder.decode rejects a view backed by a
+    // SharedArrayBuffer ("must not be shared"); slice copies into a plain buffer.
+    const headerBytes = this.data.slice(off, off + headerLen);
     const header = JSON.parse(_dec.decode(headerBytes));
     off += headerLen;
     const bodyLen = this._getU32(off);

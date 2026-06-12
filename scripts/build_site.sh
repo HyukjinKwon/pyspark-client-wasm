@@ -79,7 +79,8 @@ cp "$WHEEL" "$OUTPUT_DIR/"
 # integration item; see jupyterlite/README.md + team/findings-lane3-bridge.md).
 log "copying bridge JS assets into $OUTPUT_DIR (preserving module layout)"
 mkdir -p "$OUTPUT_DIR/jupyterlite" "$OUTPUT_DIR/worker"
-cp "$LITE_DIR"/pcw_kernel_bridge.js "$LITE_DIR"/run_python_bridge.js "$OUTPUT_DIR/jupyterlite/"
+cp "$LITE_DIR"/pcw_kernel_bridge.js "$LITE_DIR"/run_python_bridge.js \
+   "$LITE_DIR"/pcw_runpython_bootstrap.js "$OUTPUT_DIR/jupyterlite/"
 cp "$LITE_DIR"/coi-serviceworker.js "$OUTPUT_DIR/coi-serviceworker.js"
 cp pyspark_connect_web/worker/*.js "$OUTPUT_DIR/worker/"
 
@@ -91,7 +92,8 @@ MARK = "pcw bridge (injected by build_site.sh)"
 TAGS = (
     f"\n<!-- {MARK} -->"
     '\n<script src="/coi-serviceworker.js"></script>'
-    '\n<script type="module" src="/jupyterlite/pcw_kernel_bridge.js"></script>\n'
+    '\n<script type="module" src="/jupyterlite/pcw_kernel_bridge.js"></script>'
+    '\n<script type="module" src="/jupyterlite/pcw_runpython_bootstrap.js"></script>\n'
 )
 n = 0
 for html in out.rglob("*.html"):
@@ -113,6 +115,8 @@ grep -q 'Cross-Origin-Embedder-Policy: require-corp' "$OUTPUT_DIR/_headers" \
 ls "$OUTPUT_DIR"/pyspark_connect_web-*.whl >/dev/null 2>&1 \
   || die "wheel not copied into $OUTPUT_DIR"
 [ -f "$OUTPUT_DIR/coi-serviceworker.js" ] && [ -f "$OUTPUT_DIR/jupyterlite/pcw_kernel_bridge.js" ] \
+  && [ -f "$OUTPUT_DIR/jupyterlite/pcw_runpython_bootstrap.js" ] \
+  && [ -f "$OUTPUT_DIR/jupyterlite/run_python_bridge.js" ] \
   && [ -f "$OUTPUT_DIR/worker/bridge.js" ] \
   || die "bridge JS assets missing from $OUTPUT_DIR (pcw_kernel_bridge import would 404)"
 

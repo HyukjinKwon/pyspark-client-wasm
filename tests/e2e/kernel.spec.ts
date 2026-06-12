@@ -18,6 +18,8 @@
 // serial mode.
 
 import { test, expect, type Page } from "@playwright/test";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import {
   isStackUp,
   requireStack,
@@ -30,6 +32,19 @@ import {
 const LITE_URL = process.env.E2E_LITE_URL || "http://localhost:8000/";
 const SPARK_REMOTE =
   process.env.E2E_SPARK_REMOTE || "sc://localhost:8081/;transport=grpcweb";
+
+// Read the package version from pyproject.toml at test time so the in-kernel
+// wheel URL always matches the wheel build_site.sh produced - no hardcoded
+// version to forget on a release bump.
+function pcwVersion(): string {
+  const env = process.env.E2E_PCW_VERSION;
+  if (env) return env;
+  const txt = fs.readFileSync(path.join(__dirname, "..", "..", "pyproject.toml"), "utf-8");
+  const m = txt.match(/^version\s*=\s*"([^"]+)"/m);
+  if (!m) throw new Error("kernel.spec: could not read version from pyproject.toml");
+  return m[1];
+}
+const PCW_VERSION = pcwVersion();
 
 // The kernel boots JupyterLite + Pyodide, then we micropip-install in-kernel;
 // both are slow, so allow more than the per-test default.
@@ -87,7 +102,7 @@ await micropip.install("protobuf>=7")
 await micropip.install("googleapis-common-protos>=1.56.4")
 await micropip.install("zstandard")
 await micropip.install(f"{origin}/pyspark_client-4.1.2-py3-none-any.whl", deps=False)
-await micropip.install(f"{origin}/pyspark_connect_web-0.1.0-py3-none-any.whl")
+await micropip.install(f"{origin}/pyspark_connect_web-${PCW_VERSION}-py3-none-any.whl")
 import pyspark_connect_web as pcw
 pcw.install()
 from pyspark.sql import SparkSession

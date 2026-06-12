@@ -41,6 +41,7 @@ importable even before they land.
 from __future__ import annotations
 
 import re
+import sys
 import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
@@ -323,6 +324,10 @@ class _SyncExecutor:
     def shutdown(self, *args: Any, **kwargs: Any) -> None:
         pass
 
+    # Some pyspark versions poke ThreadPoolExecutor internals (e.g.
+    # reattach.py reads ``_shutdown``); expose a benign attribute.
+    _shutdown = False
+
 
 def install() -> None:
     """Monkey-patch pyspark.sql.connect to use the grpc-web transport.
@@ -404,30 +409,38 @@ def install() -> None:
 
         # (e) Pyodide is single-threaded: pyspark's reattachable iterator sends
         # ReleaseExecute via a ThreadPoolExecutor -> "can't start new thread".
-        # Swap it for a synchronous executor (releases run inline; the SAB bridge
-        # serializes RPCs anyway, and release is best-effort cleanup).
-        try:
-            import pyspark.sql.connect.client.reattach as reattach
-
-            it_cls = reattach.ExecutePlanResponseReattachableIterator
-            _ORIG["reattach_cls"] = it_cls
-            _ORIG["reattach_pool_attr"] = it_cls.__dict__.get(
-                "_get_or_create_release_thread_pool"
-            )
-
-            def _sync_pool(cls: Any) -> Any:
-                if cls._release_thread_pool_instance is None:
-                    cls._release_thread_pool_instance = _SyncExecutor()
-                return cls._release_thread_pool_instance
-
-            it_cls._get_or_create_release_thread_pool = classmethod(  # type: ignore[assignment]
-                _sync_pool
-            )
-            it_cls._release_thread_pool_instance = None
-        except Exception:  # pragma: no cover - reattach should always import
-            pass
+        # Swap it for a no-op synchronous executor. ONLY under Pyodide
+        # (sys.platform == "emscripten"): on real CPython (local dev, the CI
+        # integration job) threads work, so we must leave the real pool in place
+        # - replacing it breaks pyspark versions that poke its internals.
+        if sys.platform == "emscripten":
+            _patch_reattach_pool()
 
         _INSTALLED = True
+
+
+def _patch_reattach_pool() -> None:
+    """Swap pyspark's reattach ReleaseExecute pool for a no-op (Pyodide only)."""
+    try:
+        import pyspark.sql.connect.client.reattach as reattach
+
+        it_cls = reattach.ExecutePlanResponseReattachableIterator
+        _ORIG["reattach_cls"] = it_cls
+        _ORIG["reattach_pool_attr"] = it_cls.__dict__.get(
+            "_get_or_create_release_thread_pool"
+        )
+
+        def _sync_pool(cls: Any) -> Any:
+            if cls._release_thread_pool_instance is None:
+                cls._release_thread_pool_instance = _SyncExecutor()
+            return cls._release_thread_pool_instance
+
+        it_cls._get_or_create_release_thread_pool = classmethod(  # type: ignore[assignment]
+            _sync_pool
+        )
+        it_cls._release_thread_pool_instance = None
+    except Exception:  # pragma: no cover - reattach should always import
+        pass
 
 
 def uninstall() -> None:

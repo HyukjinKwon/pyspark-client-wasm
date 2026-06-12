@@ -111,10 +111,13 @@ jobs:
             "jupyter-server>=2,<3"
           # jupyter-server is required by jupyterlite's `contents` addon to add
           # custom content (the demo notebook via `jupyter lite build --contents`).
-          # Reference generator (tests/e2e/reference.py) uses the NATIVE PySpark
-          # Connect client (grpcio is fine here - it lives under tests/, outside
-          # the package; DECISIONS.md #1 only forbids grpcio inside the package).
           python -m pip install -e ".[dev]"
+          # Reference generator (tests/e2e/reference.py) uses the NATIVE PySpark
+          # Connect client to produce ground-truth results -> it needs real
+          # grpcio + grpcio-status. That is fine here: reference.py lives under
+          # tests/, outside the package; DECISIONS.md #1 only forbids grpcio
+          # *inside* pyspark_connect_web/.
+          python -m pip install grpcio grpcio-status
 
       - name: Build wheel + JupyterLite site (make site)
         run: make site

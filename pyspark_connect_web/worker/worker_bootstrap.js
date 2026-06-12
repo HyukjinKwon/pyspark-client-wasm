@@ -21,11 +21,15 @@
 const CONTROL_SLOTS = 8; // Int32 slots
 const DATA_BYTES = 16 * 1024 * 1024; // 16 MiB payload region
 
-// NOTE: pyarrow was DISABLED in Pyodide 0.28.0 (build issues) and re-enabled in
-// 0.29.2. v314.0.0 (the current stable) ships pyarrow 22.0.0 + zstandard 0.25.0
-// + pandas 3.0.2 + numpy 2.4.3 (Python 3.14), which is what we loadPackage below.
+// Pyodide is loaded SAME-ORIGIN from /pyodide/ (vendored next to the site).
+// A cross-origin CDN does NOT work here: under cross-origin isolation the
+// worker's importScripts() of a CDN pyodide.js is blocked by COEP (neither
+// require-corp - jsdelivr sends no CORP - nor credentialless permits it in
+// Chromium). Same-origin sidesteps COEP entirely (and is faster). v314.0.0
+// ships pyarrow 22.0.0 + zstandard 0.25.0 + pandas 3.0.2 + numpy 2.4.3 (Py3.14).
+// Override with self.PCW_PYODIDE_INDEX_URL if you host it elsewhere same-origin.
 const PYODIDE_INDEX_URL =
-  self.PCW_PYODIDE_INDEX_URL || "https://cdn.jsdelivr.net/pyodide/v314.0.0/full/";
+  self.PCW_PYODIDE_INDEX_URL || new URL("/pyodide/", self.location.origin).href;
 
 // Packages Pyodide ships / we install. grpcio + grpcio-status are intentionally
 // absent (C-ext, not in Pyodide) - pyspark_connect_web's _grpc_shim stubs them.

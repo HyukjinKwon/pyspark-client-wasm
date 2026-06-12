@@ -11,9 +11,9 @@
 //
 //   B. Inside JupyterLite: the kernel owns the worker and its own exec protocol.
 //      There, __pcwRunPython is implemented by dispatching a kernel execute
-//      request and reading the reply. That path is the open integration item in
-//      the project notes (#1) and is stubbed here with a clear throw
-//      so the e2e harness surfaces "not wired" rather than hanging.
+//      request and reading the reply (installRunPythonForJupyterLite). This is
+//      wired up by pcw_runpython_bootstrap.js and exercised end-to-end by
+//      tests/e2e/kernel.spec.ts (against jupyterlite-pyodide-kernel >= 0.7).
 //
 // The contract the e2e harness expects (helpers.ts):
 //   window.__pcwRunPython(src: string): Promise<string>

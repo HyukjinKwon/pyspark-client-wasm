@@ -126,9 +126,9 @@ cp "$WHEEL" "$OUTPUT_DIR/"
 #                             so the jupyterlite/ <-> worker/ relative layout MUST
 #                             be preserved in the output (hence the two dirs below
 #                             + the /jupyterlite/... site-root-absolute src).
-# run_python_bridge.js is copied for the e2e hook but is NOT auto-wired inside
-# JupyterLite (Shape B needs a live kernel connection - the remaining browser
-# integration item; see jupyterlite/README.md + the project notes).
+# run_python_bridge.js (Shape B) IS auto-wired inside JupyterLite by
+# pcw_runpython_bootstrap.js (injected below): it starts a kernel and binds
+# window.__pcwRunPython to it. Covered by tests/e2e/kernel.spec.ts.
 log "copying bridge JS assets into $OUTPUT_DIR (preserving module layout)"
 mkdir -p "$OUTPUT_DIR/jupyterlite" "$OUTPUT_DIR/worker"
 cp "$LITE_DIR"/pcw_kernel_bridge.js "$LITE_DIR"/run_python_bridge.js \

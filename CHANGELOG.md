@@ -19,8 +19,25 @@ carry **no** `grpcio` dependency - .
 
 ## [Unreleased]
 
+### Fixed
+- **SAB bridge deadlock on `spark.sql`** - an eager command runs two
+  server-streaming RPCs back-to-back; the second's `S_REQ_READY` could race the
+  abandoned first stream's `S_IDLE`, leaving the main thread parked forever
+  (intermittent ~30-50% hang). The bridge now treats `S_REQ_READY` as
+  "exchange abandoned" and re-dispatches; STATE writes are generation-guarded.
+  Regression-covered in `tests/js/bridge.test.mjs`.
+
 ### Added
-- _Nothing yet._
+- **Real JupyterLite-kernel e2e** (`tests/e2e/kernel.spec.ts`): boots the actual
+  lite kernel, installs in-kernel, and runs `range`/`spark.sql`/`groupBy` through
+  the kernel SAB bridge - not just the standalone harness.
+
+### Changed
+- **JupyterLite bumped to core 0.7.6 / pyodide-kernel 0.7.2** (module-worker
+  kernel; the 0.6.1 classic worker was incompatible with recent Pyodide). Pyodide
+  is vendored same-origin at the exact version the kernel expects (0.29.3), shared
+  by the kernel and the harness. `exposeAppInBrowser` lets the kernel bootstrap
+  reach the app.
 
 <!--
 Release runbook (kept here so it travels with the changelog; docs/ is owned by

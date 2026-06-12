@@ -10,12 +10,12 @@
 // Graceful-degradation contract:
 //   * isStackUp() gates the whole suite - if the JupyterLite page is unreachable
 //     the specs skip (unless E2E_REQUIRE_STACK=1).
-//   * bridgeAvailable() additionally checks that the actually exposed
-//     window.__pcwRunPython on this page. If the page is up but the bridge is
-//     NOT wired (e.g. JupyterLite-kernel integration still pending - see
-//     the project notes open item #1), the bridge-dependent specs
-//     skip with a clear reason instead of hanging or failing red - UNLESS
-//     E2E_REQUIRE_STACK=1, in which case a missing bridge is a hard failure.
+//   * bridgeAvailable() additionally checks that window.__pcwRunPython is exposed
+//     on this page. If the page is up but the bridge is NOT wired, the
+//     bridge-dependent specs skip with a clear reason instead of hanging or
+//     failing red - UNLESS E2E_REQUIRE_STACK=1, in which case a missing bridge is
+//     a hard failure. Both shapes are covered: the standalone harness
+//     (v0-checklist.spec.ts) and the real JupyterLite kernel (kernel.spec.ts).
 
 import type { Page } from "@playwright/test";
 

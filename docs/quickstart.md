@@ -27,7 +27,7 @@ This starts a Spark 4.1.2 Connect server and an Envoy proxy that exposes:
 | URL | What |
 |-----|------|
 | `sc://localhost:8081/;transport=grpcweb` | grpc-web endpoint the client connects to |
-| <http://localhost:8000/> | JupyterLite site, served with the mandatory `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` headers (required for `SharedArrayBuffer`) |
+| <http://localhost:8000/> | JupyterLite site, served with the mandatory `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: credentialless` headers (required for `SharedArrayBuffer`) |
 
 See [`deploy/README.md`](https://github.com/HyukjinKwon/pyspark-client-wasm/blob/main/deploy/README.md)
 for ports, version pins, and CORS/header checks.
@@ -50,6 +50,56 @@ blocking bridge cannot work:
 ```js
 crossOriginIsolated === true   // must be true; else SharedArrayBuffer is unavailable
 ```
+
+## Ways to use it
+
+Pick the path that fits - all of them run the *real* PySpark API in the browser.
+
+### 1. In JupyterLite (a notebook, nothing to install)
+
+Build the site and bring up the stack (Spark Connect + Envoy grpc-web + the
+JupyterLite site, served cross-origin isolated on `:8000`):
+
+```bash
+make site                                  # build the JupyterLite site into _output/
+docker compose -f deploy/compose.yaml up   # serves :8000 (site) + :8081 (grpc-web) + :15002 (Spark)
+```
+
+Open <http://localhost:8000/>, then in a notebook cell run the `pcw.install()` +
+`SparkSession.builder.remote(...)` snippet from step 3 above. GitHub Pages / other
+static hosts: see [JupyterLite hosting](jupyterlite-hosting.md).
+
+### 2. Embed it in your own web page
+
+The site ships a small, self-contained page that boots Pyodide in a Web Worker,
+micropip-installs the wheel, runs `pcw.install()`, binds a `SparkSession`, and
+exposes `window.__pcwRunPython(src)`. Use
+[`pyspark_connect_web/jupyterlite/harness.html`](https://github.com/HyukjinKwon/pyspark-client-wasm/blob/main/pyspark_connect_web/jupyterlite/harness.html)
+as the reference for wiring `worker/worker_bootstrap.js` + `worker/bridge.js` into
+your app. The page must be cross-origin isolated (`COOP: same-origin`,
+`COEP: credentialless`) for the `SharedArrayBuffer` bridge.
+
+### 3. Run the end-to-end example
+
+The browser e2e brings up the whole stack and drives the v0 matrix
+(`range/collect`, `groupBy/agg` Arrow parity, `createDataFrame`, `spark.sql`) in
+real Chromium:
+
+```bash
+make site
+docker compose -f deploy/compose.yaml up -d
+cd tests/e2e && npm install && npx playwright install --with-deps chromium
+E2E_REQUIRE_STACK=1 npx playwright test
+```
+
+It also runs on every push (the `e2e` GitHub Actions workflow).
+
+### DataFrame API examples
+
+Once connected it is ordinary PySpark. Runnable scripts live in
+[`examples/`](https://github.com/HyukjinKwon/pyspark-client-wasm/tree/main/examples)
+(`quickstart`, `transformations`, `aggregations`, `joins`, `window`, `sql`, `io`);
+they double as plain native-PySpark scripts against any Spark Connect server.
 
 ## What just happened
 

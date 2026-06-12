@@ -190,3 +190,43 @@ so `.collect()` returns data synchronously. See `API_CONTRACT.md` for the seam.
   `window.__pcwRunPython` exists (your open item #1 / the inject-scripts ACTION
   to me) — that build-wiring gap is the gate's first real blocker, not a workflow
   bug. Details + full first-run risk list in `team/findings-lane5-deploy.md`.
+- DOCS 2026-06-12: Stood up the MkDocs + Material + mkdocstrings[python] docs site
+  (`mkdocs.yml`, `docs/` pages: index/installation(conda)/quickstart/connection-
+  patterns/jupyterlite-hosting/api-reference, plus the existing architecture/
+  running-locally/security/packaging-release folded into the nav) and
+  `.github/workflows/docs.yml` (build + `actions/deploy-pages` to GitHub Pages on
+  push-to-main/dispatch, pinned versions, `pages: write`+`id-token: write`).
+  REMOVED the trademark "Unofficial personal project…" disclaimer block from all
+  docs that had it (architecture/running-locally/security/packaging-release) and
+  trimmed two dangling references in packaging-release.md. **ACTION integrator:**
+  enable Pages → Source = **GitHub Actions** in repo settings, else the deploy job
+  fails. Validated YAML only (offline; no `mkdocs build`). Details in
+  `team/findings-docs.md`. Did not touch README.md / ci.yml / e2e.yml / pyproject.
+- RELEASE 2026-06-12: Added `.github/workflows/release.yml` (tag `v*` -> `python -m
+  build` sdist+wheel, assert no-grpcio [reuses ci.yml's check], publish to PyPI via
+  OIDC trusted publishing [env `pypi`, `id-token: write`], build the JupyterLite
+  site as a Release asset, GitHub Release with notes from CHANGELOG.md;
+  `workflow_dispatch` dry_run = build-only|testpypi) + `CHANGELOG.md` (Keep a
+  Changelog; `0.1.0` first entry + `Unreleased`; runbook in a comment). Versioning:
+  semver, `vX.Y.Z` tags, single source = `version` in pyproject; build HARD-FAILS on
+  tag!=version. Validated statically only (YAML parses, inline scripts `bash -n`-
+  clean, awk notes-extractor checked vs `[0.1.0]`); OIDC upload + Release creation
+  can only run on a real tag push. **ACTION integrator:** add the `integration` CI
+  job (Java 17 + `pip install -e .[dev]` + test-only `grpcio grpcio-status` +
+  `pytest -q tests/integration`), `[project.urls]`, and (optional) a top-level
+  Apache-2.0 `LICENSE` — exact snippets in `team/findings-release.md`. **ACTION
+  maintainer:** register the repo as a PyPI/TestPyPI trusted publisher for the
+  `pypi`/`testpypi` Environments before the first tag.
+- TEST-COVERAGE 2026-06-12: Measured unit coverage (pytest-cov, `--ignore=tests/e2e
+  --ignore=tests/integration`): **83% -> 96%** after adding 47 offline tests across 4
+  new test-only files (`tests/test_grpc_shim.py`, `test_coverage_gaps.py`,
+  `test_arrow_coverage_gaps.py`, `test_sab_channel_gaps.py`); 145 pass + 1 xfail.
+  Headline gap was `_grpc_shim.py` 19%->100% (untested locally since real grpcio
+  early-returns the install; covered via a `sys.meta_path` blocker). `grpcweb.py`
+  ->100%, `patch.py`->99%, `arrow/results.py`->99%. No source edits, no other lanes'
+  test files touched. One genuine parity gap pinned `xfail(strict)`: lane 4 applies
+  no `spark.sql.session.timeZone` localization (tz-aware timestamp decode). No real
+  bugs found. **ACTION integrator:** add `pytest-cov` to `[dev]`, a
+  `[tool.coverage.run]`/`[tool.coverage.report]` block (omit `worker/kernel_bootstrap.py`,
+  browser-only), and a `--cov-fail-under=90` coverage step to ci.yml's `unit` job —
+  exact snippets in `team/findings-coverage.md`.

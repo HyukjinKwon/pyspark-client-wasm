@@ -24,10 +24,15 @@ const DATA_BYTES = 16 * 1024 * 1024; // 16 MiB payload region
 const PYODIDE_INDEX_URL =
   self.PCW_PYODIDE_INDEX_URL || "https://cdn.jsdelivr.net/pyodide/v0.28.0/full/";
 
-// Packages Pyodide ships / we install. grpcio is intentionally absent.
-const PURE_PYODIDE_PKGS = ["micropip", "pyarrow", "pandas", "numpy"];
+// Packages Pyodide ships / we install. grpcio + grpcio-status are intentionally
+// absent (C-ext, not in Pyodide) — pyspark_connect_web's _grpc_shim stubs them.
+// zstandard IS a Pyodide package and IS required by pyspark.sql.connect's
+// check_dependencies, so it must be loaded.
+const PURE_PYODIDE_PKGS = ["micropip", "pyarrow", "pandas", "numpy", "zstandard"];
 const MICROPIP_PKGS = [
   "protobuf>=7",
+  // pure-Python, required by pyspark.sql.connect (google.rpc.*); NOT in Pyodide.
+  "googleapis-common-protos>=1.56.4",
   "pyspark>=4.0,<4.2",
   // The wheel is served alongside the page; URL injected by the host config.
   self.PCW_WHEEL_URL || "pyspark_connect_web-0.0.1.dev0-py3-none-any.whl",

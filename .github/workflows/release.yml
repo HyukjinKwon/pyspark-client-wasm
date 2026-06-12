@@ -1,0 +1,290 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# release.yml — publish pyspark-connect-web on a version tag.
+#
+# Mirrors the maintainer's sibling release flows (spark-connect-ruby /
+# spark-connect-scala3): semantic-version tag push -> build the language
+# package -> publish to the language registry -> cut a GitHub Release with
+# notes from CHANGELOG.md, attaching the built site as an asset.
+#
+# For Python that registry is PyPI, and we publish via OIDC *trusted
+# publishing* (no long-lived API token in repo secrets): the `pypi`
+# environment is registered as a trusted publisher on PyPI, and
+# `permissions: id-token: write` lets pypa/gh-action-pypi-publish mint a
+# short-lived token at publish time. See the runbook in CHANGELOG.md.
+#
+# Triggers:
+#   * push of a tag matching  v*        -> real release to PyPI + GitHub Release
+#   * workflow_dispatch (dry_run input) -> build only, or publish to TestPyPI,
+#                                          never touches real PyPI / Releases
+#
+# What this asserts before publishing (reused from ci.yml's build-wheel job):
+#   * the wheel imports under the Pyodide constraint (no grpcio installed), and
+#   * the wheel declares NO grpcio dependency (DECISIONS.md #1).
+#
+# This file is validated statically only (YAML parse + `bash -n` on every inline
+# script); the maintainer's sandbox has no network/docker, so the PyPI upload,
+# OIDC handshake and GitHub Release creation can ONLY be exercised on a real tag
+# push (or a real workflow_dispatch). See the "validated only on a real tag"
+# notes in team/findings-release.md.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: >-
+          Build + verify only. If 'testpypi', also upload to TestPyPI via OIDC.
+          Never publishes to real PyPI and never creates a GitHub Release.
+        type: choice
+        default: "build-only"
+        options:
+          - "build-only"
+          - "testpypi"
+
+# Default to least privilege; jobs widen what they need (id-token for OIDC,
+# contents:write for the Release).
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Build sdist + wheel and assert the Pyodide invariants.
+  #    Single source of the dist artifacts that every later job consumes.
+  # ---------------------------------------------------------------------------
+  build:
+    name: build sdist + wheel (assert no grpcio)
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build sdist + wheel (python -m build)
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          # Pin matches scripts/build_site.sh + ci.yml's build-wheel job.
+          python -m pip install "build==1.2.2"
+          python -m build --sdist --wheel --outdir dist
+          ls -la dist
+
+      - name: Install + import the wheel under the Pyodide constraint (no grpcio)
+        run: |
+          set -euxo pipefail
+          # grpcio is deliberately NOT installed: this proves the package imports
+          # without it, exactly as it must in Pyodide (DECISIONS.md #1, _grpc_shim).
+          python -m pip install dist/pyspark_connect_web-*.whl
+          python -c "import pyspark_connect_web; print('import OK', pyspark_connect_web.__name__)"
+
+      - name: Assert the wheel declares no grpcio dependency (DECISIONS.md #1)
+        # Same assertion as ci.yml's build-wheel job — the publish path must carry
+        # the identical guard so a regression can never ship to PyPI.
+        run: |
+          python - <<'PY'
+          import importlib.metadata as m
+          reqs = m.requires("pyspark-connect-web") or []
+          bad = [r for r in reqs if "grpcio" in r]
+          assert not bad, f"grpcio in wheel requirements: {bad}"
+          print("OK: no grpcio in wheel requirements")
+          PY
+
+      - name: twine check (PyPI metadata + long-description render)
+        run: |
+          set -euxo pipefail
+          python -m pip install "twine==5.1.1"
+          twine check dist/*
+
+      - name: Resolve version (from the built dist; tag must match on a tag push)
+        id: ver
+        run: |
+          set -euxo pipefail
+          # Derive the version from the wheel filename: the single source of truth
+          # is pyproject.toml -> build, so no second place to drift.
+          whl="$(ls dist/pyspark_connect_web-*.whl)"
+          version="$(basename "$whl" | sed -E 's/^pyspark_connect_web-([^-]+)-.*/\1/')"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "built version: ${version}"
+          # On a tag push, enforce that the tag (vX.Y.Z) matches the package version.
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME#v}"
+            if [ "${tag}" != "${version}" ]; then
+              echo "::error::tag '${GITHUB_REF_NAME}' (=> ${tag}) != package version '${version}' — bump pyproject.toml version to match the tag."
+              exit 1
+            fi
+            echo "tag ${GITHUB_REF_NAME} matches package version ${version}"
+          fi
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 2. Build the JupyterLite site (reuses scripts/build_site.sh) and upload it
+  #    so it can be attached to the GitHub Release as a downloadable asset.
+  # ---------------------------------------------------------------------------
+  site:
+    name: build JupyterLite site (release asset)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tooling (pinned, matches scripts/build_site.sh)
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "build==1.2.2" \
+            "jupyterlite-core==0.6.4" \
+            "jupyterlite-pyodide-kernel==0.6.1"
+
+      - name: Build wheel + JupyterLite site into _output
+        env:
+          PCW_OUTPUT_DIR: _output
+        run: scripts/build_site.sh
+
+      - name: Tar the site for a single, stable release asset
+        run: |
+          set -euxo pipefail
+          test -d _output || { echo "::error::_output not built"; exit 1; }
+          # name carried by the build job's version output via the artifact path;
+          # here we just produce a deterministic archive name from the wheel.
+          whl="$(ls _output/pyspark_connect_web-*.whl)"
+          version="$(basename "$whl" | sed -E 's/^pyspark_connect_web-([^-]+)-.*/\1/')"
+          tar -czf "pyspark-connect-web-site-${version}.tgz" -C _output .
+          ls -la "pyspark-connect-web-site-${version}.tgz"
+
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: pyspark-connect-web-site-*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 3a. Publish to PyPI via OIDC trusted publishing — REAL TAG PUSHES ONLY.
+  #     No API token: the `pypi` environment is the trusted publisher.
+  # ---------------------------------------------------------------------------
+  publish-pypi:
+    name: publish to PyPI (OIDC trusted publishing)
+    needs: [build, site]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pyspark-connect-web/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write  # OIDC: mint the short-lived PyPI token
+    steps:
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No `password:` — trusted publishing uses the OIDC id-token above.
+        # `repository-url` defaults to the real PyPI.
+
+  # ---------------------------------------------------------------------------
+  # 3b. workflow_dispatch dry-run path: TestPyPI via OIDC (never real PyPI).
+  # ---------------------------------------------------------------------------
+  publish-testpypi:
+    name: publish to TestPyPI (dry-run, OIDC)
+    needs: [build, site]
+    if: github.event_name == 'workflow_dispatch' && inputs.dry_run == 'testpypi'
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/pyspark-connect-web/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  # ---------------------------------------------------------------------------
+  # 4. Cut the GitHub Release with notes extracted from CHANGELOG.md for the tag,
+  #    attaching the dist files + the JupyterLite site tarball. TAG PUSHES ONLY.
+  # ---------------------------------------------------------------------------
+  github-release:
+    name: GitHub Release (notes from CHANGELOG.md)
+    needs: [build, publish-pypi]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create the Release + upload assets
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Download site
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site
+
+      - name: Extract release notes for this tag from CHANGELOG.md
+        id: notes
+        run: |
+          set -euo pipefail
+          version="${{ needs.build.outputs.version }}"
+          # Pull the section for [version] up to (but not including) the next
+          # "## [" heading. Keep a Changelog format: "## [X.Y.Z] - DATE".
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { grab=1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::warning::no CHANGELOG.md section for ${version}; falling back to a generated note"
+            printf 'Release %s. See CHANGELOG.md.\n' "$version" > release-notes.md
+          fi
+          echo "----- release notes -----"
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "v${{ needs.build.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(needs.build.outputs.version, 'dev') || contains(needs.build.outputs.version, 'rc') || contains(needs.build.outputs.version, 'a') || contains(needs.build.outputs.version, 'b') }}
+          files: |
+            dist/*
+            site/*.tgz

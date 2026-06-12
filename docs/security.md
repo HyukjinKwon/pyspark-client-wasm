@@ -2,11 +2,6 @@
 
 # Security review — pyspark-connect-web
 
-> Disclaimer: **unofficial personal project**, not affiliated with or endorsed by
-> the Apache Software Foundation. "Apache Spark" and "PySpark" are trademarks of
-> the ASF. This document is a threat model + mitigations for *this* project's
-> deployment, not security advice for Apache Spark itself.
-
 This is a defense-oriented threat model of the deployment topology:
 
 ```

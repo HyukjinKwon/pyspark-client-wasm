@@ -26,11 +26,34 @@ dev = [
     "pandas",
     "protobuf>=7",
     "googleapis-common-protos>=1.56.4",
+    "zstandard>=0.25.0",
     "pytest",
+    "pytest-cov",
 ]
+
+[project.urls]
+Homepage = "https://github.com/HyukjinKwon/pyspark-client-wasm"
+Repository = "https://github.com/HyukjinKwon/pyspark-client-wasm"
+Documentation = "https://hyukjinkwon.github.io/pyspark-client-wasm/"
+Changelog = "https://github.com/HyukjinKwon/pyspark-client-wasm/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 include = ["pyspark_connect_web*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["pyspark_connect_web"]
+branch = true
+# browser-only (imports the `js` FFI / needs cross-origin isolation); covered by e2e
+omit = ["pyspark_connect_web/worker/kernel_bootstrap.py"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]

@@ -42,14 +42,42 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-      - name: pytest
+      - name: pytest (+ coverage)
         # Unit tests only. Excludes:
         #   tests/e2e         — Playwright/TS, needs a browser + live stack
         #   tests/integration — needs a real Spark Connect server + real grpcio
         #                       (covered by the dedicated `integration` job below)
         # grpcio/grpcio-status are deliberately NOT installed here, so this job
         # also proves the package imports under the Pyodide constraint (_grpc_shim).
-        run: pytest -q --ignore=tests/e2e --ignore=tests/integration
+        run: >
+          pytest -q --ignore=tests/e2e --ignore=tests/integration
+          --cov=pyspark_connect_web --cov-report=term-missing
+          --cov-report=xml --cov-fail-under=90
+
+  integration:
+    name: integration (real Spark Connect server)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install
+        # The integration harness starts a real Connect server and uses a
+        # pure-Python grpc-web<->gRPC bridge that DOES need real grpcio +
+        # grpcio-status — these live only in tests/ (the Envoy stand-in), which
+        # is outside the package, so DECISIONS.md #1 (no grpcio in the package)
+        # still holds. The bundled Spark Connect jar means no extra download.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install grpcio grpcio-status
+      - name: pytest tests/integration
+        run: pytest -q tests/integration
 
   lint:
     name: lint + format (ruff)

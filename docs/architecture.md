@@ -2,9 +2,6 @@
 
 # Architecture — pyspark-connect-web
 
-> Unofficial personal project — not affiliated with or endorsed by the Apache
-> Software Foundation. "Apache Spark" and "PySpark" are trademarks of the ASF.
-
 **PySpark in JupyterLite.** Run the *real* PySpark Connect Python client inside a
 browser (JupyterLite/Pyodide), talking to a Spark Connect server through a
 grpc-web transport. User PySpark code runs unchanged.

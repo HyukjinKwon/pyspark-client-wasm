@@ -5,10 +5,6 @@
 How the `pyspark_connect_web` wheel is built, how it is installed in the browser
 via `micropip`, and the release checklist.
 
-> Disclaimer: this is an **unofficial personal project**, not affiliated with or
-> endorsed by the Apache Software Foundation. "Apache Spark" and "PySpark" are
-> trademarks of the ASF. See the README disclaimer.
-
 ## What ships
 
 The distributable is a pure-Python wheel: `pyspark_connect_web-<version>-py3-none-any.whl`.
@@ -117,15 +113,13 @@ Pre-release:
 - [ ] `make site` builds `_output` with the wheel + `_headers` present.
 - [ ] e2e against a live stack: `E2E_REQUIRE_STACK=1 make e2e` green (the full
       DECISIONS.md v0 matrix). Skip-only runs do **not** count as a release gate.
-- [ ] Trademark/identity disclaimer present in `README.md` and docs (it is).
 
 Publish:
 
 - [ ] Tag the release (`vX.Y.Z`); CI builds the wheel on the tag.
 - [ ] (If publishing to an index) `twine check dist/*` then upload. The package
       name on the index is `pyspark-connect-web`; the import name is
-      `pyspark_connect_web`. The maintainer is still deciding the **repo** name
-      vs the **package** name — see the README note on the split.
+      `pyspark_connect_web`.
 - [ ] Publish the built `_output` site to the cross-origin-isolated host
       (Envoy/static, or a Pages host that honours `_headers`).
 - [ ] Smoke-test the published site: open it, confirm `crossOriginIsolated === true`,

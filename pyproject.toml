@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: Apache-2.0
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyspark-connect-web"
+version = "0.0.1.dev0"
+description = "Run the PySpark Connect client in JupyterLite/Pyodide via a grpc-web transport (PySpark in JupyterLite)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Hyukjin Kwon" }]
+# pyspark is a runtime dep but is provided by the Pyodide environment (and pinned
+# by install()); we do NOT depend on grpcio — it is not available in Pyodide.
+dependencies = []
+
+[project.optional-dependencies]
+# local dev/test only; the browser gets these from Pyodide
+dev = ["pyspark>=4.0,<4.2", "pyarrow>=22", "pandas", "protobuf>=7", "pytest"]
+
+[tool.setuptools.packages.find]
+include = ["pyspark_connect_web*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

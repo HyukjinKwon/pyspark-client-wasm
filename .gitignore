@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.DS_Store
+node_modules/
+*.whl
+.jupyterlite.doit.db
+_output/

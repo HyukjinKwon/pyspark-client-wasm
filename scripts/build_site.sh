@@ -24,6 +24,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 OUTPUT_DIR="${PCW_OUTPUT_DIR:-_output}"
+# Absolute, so `jupyter lite build --output-dir` is unambiguous when we point
+# --lite-dir at a temp dir (a relative _output would otherwise land under it).
+mkdir -p "$OUTPUT_DIR"
+OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 LITE_DIR="pyspark_connect_web/jupyterlite"
 
 # --- pinned build tooling --------------------------------------------------
@@ -53,8 +57,16 @@ log "wheel: $WHEEL"
 
 # --- 2. build the JupyterLite site -----------------------------------------
 log "jupyter lite build -> $OUTPUT_DIR"
+# Build from an ISOLATED lite-dir containing only jupyter-lite.json. Passing the
+# config by its deep in-package path makes jupyterlite's `lite` addon mirror that
+# path under _output (e.g. _output/pyspark_connect_web/jupyterlite/...) and fail
+# with FileNotFoundError. A clean lite-dir keeps the config at the root so it is
+# patched to _output/jupyter-lite.json, and avoids scanning stray package files.
+LITE_BUILD_DIR="$(mktemp -d)"
+trap 'rm -rf "$LITE_BUILD_DIR"' EXIT
+cp "$LITE_DIR/jupyter-lite.json" "$LITE_BUILD_DIR/jupyter-lite.json"
 jupyter lite build \
-  --config "$LITE_DIR/jupyter-lite.json" \
+  --lite-dir "$LITE_BUILD_DIR" \
   --contents "$LITE_DIR/demo.ipynb" \
   --output-dir "$OUTPUT_DIR"
 

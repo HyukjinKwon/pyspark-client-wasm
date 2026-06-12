@@ -7,7 +7,7 @@
       "@jupyterlite/pyodide-kernel-extension:kernel": {
         "pyodideUrl": "https://cdn.jsdelivr.net/pyodide/v0.28.0/full/pyodide.js",
         "loadPyodideOptions": {
-          "packages": ["micropip", "pyarrow", "pandas", "numpy"]
+          "packages": ["micropip", "pyarrow", "pandas", "numpy", "zstandard"]
         }
       }
     },

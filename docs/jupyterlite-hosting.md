@@ -15,7 +15,7 @@ with:
 
 ```
 Cross-Origin-Opener-Policy:   same-origin
-Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Embedder-Policy: credentialless
 ```
 
 The demo notebook asserts `crossOriginIsolated === true` before importing, so a
@@ -40,11 +40,15 @@ buffer. This is a hard invariant (`the design notes` #4).
 
 ## COEP caveat (all isolated hosts)
 
-`require-corp` blocks any *cross-origin* subresource that lacks CORP/CORS
-headers. The CDN Pyodide build and the wheel must be CORS-enabled or hosted
-same-origin. jsDelivr (the default `pyodideUrl`) sends permissive CORS, so it
-works; if you self-host, copy `pyodide` + the wheel into the site root and point
-`pyodideUrl` / `PCW_WHEEL_URL` at them.
+We serve `Cross-Origin-Embedder-Policy: credentialless`, which keeps the page
+isolated while letting the cross-origin grpc-web `fetch` to Envoy through as a
+no-credentials request (Envoy replies with `Cross-Origin-Resource-Policy:
+cross-origin`). However, the Web Worker still **cannot import Pyodide or the
+wheels from a cross-origin CDN** under COEP, so the build **vendors them
+same-origin**: Pyodide into `/pyodide/` and the wheels into the site root. The
+worker reads `self.PCW_PYODIDE_INDEX_URL` (default `/pyodide/`) and
+`self.PCW_WHEEL_URL` / `self.PCW_PYSPARK_WHEEL_URL`; only override them with
+**same-origin** URLs.
 
 ## Local dev server with the right headers
 
@@ -58,7 +62,7 @@ import http.server, functools
 class H(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
-        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        self.send_header("Cross-Origin-Embedder-Policy", "credentialless")
         super().end_headers()
 http.server.test(HandlerClass=H, port=8000)
 ```

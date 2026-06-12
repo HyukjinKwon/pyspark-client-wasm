@@ -75,10 +75,10 @@ await micropip.install("https://<your-lite-origin>/pyspark_connect_web-<version>
 
 `scripts/build_site.sh` copies the freshly built wheel into the JupyterLite
 output root so it is served from the same (cross-origin-isolated) origin as the
-page - important under COEP `require-corp` (a cross-origin CDN wheel must send
-`Cross-Origin-Resource-Policy` or the import is blocked; see
-`the project notes` gotcha #5). `worker_bootstrap.js` reads the wheel
-URL from `self.PCW_WHEEL_URL` (default: the wheel served at the site root).
+page - important under COEP `credentialless` (the worker cannot import a
+cross-origin CDN wheel, so it must be served same-origin). `worker_bootstrap.js`
+reads the wheel URL from `self.PCW_WHEEL_URL` (default: the wheel served at the
+site root).
 
 Then, in a notebook cell:
 

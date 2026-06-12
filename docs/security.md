@@ -23,8 +23,7 @@ output <-> the JupyterLite DOM. Each section below: **threat -> impact -> mitiga
 **Why it matters.** The blocking `.collect()` bridge needs `SharedArrayBuffer` +
 `Atomics.wait`, which the browser only exposes when the page is **cross-origin
 isolated** (`Cross-Origin-Opener-Policy: same-origin` +
-`Cross-Origin-Embedder-Policy: require-corp`).  makes this a hard
-invariant.
+`Cross-Origin-Embedder-Policy: credentialless`). This is a hard invariant.
 
 **Threats.**
 
@@ -37,8 +36,13 @@ invariant.
   loads but `crossOriginIsolated === false`; the bridge then hangs or throws.
   Worse, a partial config can leave the page in a non-isolated state that still
   exposes timing primitives without the intended walls.
-* *COEP breaks embeds.* `require-corp` blocks any cross-origin subresource that
-  does not opt in via `Cross-Origin-Resource-Policy` or CORS - e.g. CDN wheels.
+* *COEP constrains cross-origin subresources.* We use `credentialless`, so
+  cross-origin subresources load but are fetched **without credentials**. The
+  cross-origin grpc-web endpoint therefore works (Envoy sends
+  `Cross-Origin-Resource-Policy: cross-origin`), but Pyodide and the wheels are
+  vendored same-origin because the worker cannot import them from a cross-origin
+  CDN under COEP. (`require-corp` would be stricter still: it blocks *any*
+  cross-origin subresource lacking CORP/CORS.)
 
 **Mitigations.**
 
@@ -49,9 +53,10 @@ invariant.
   stripped header is caught loud, not silent.
 * `worker_bootstrap.js` calls `assertIsolated()` and bails before allocating the
   SAB if isolation is off - fail-closed, never run on a non-isolated page.
-* Vendor wheels behind the **same** isolated origin (`scripts/build_site.sh`
-  copies the wheel into `_output`) so COEP does not block the import. If you must
-  load from a CDN, that CDN must send `Cross-Origin-Resource-Policy: cross-origin`.
+* Vendor Pyodide **and** the wheels behind the **same** isolated origin
+  (`scripts/build_site.sh` copies the wheel into `_output`; the build vendors
+  Pyodide into `/pyodide/`) so COEP does not block the worker's imports. If you
+  must load from a CDN, that CDN must send `Cross-Origin-Resource-Policy: cross-origin`.
 * Keep isolation **scoped to this app's origin**; do not relax COOP to allow
   popups from untrusted origins.
 

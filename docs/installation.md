@@ -84,9 +84,9 @@ from pyspark.sql import SparkSession
 spark = SparkSession.builder.remote("sc://<host>:8081/;transport=grpcweb").getOrCreate()
 ```
 
-Under COEP `require-corp`, a cross-origin CDN wheel must send
-`Cross-Origin-Resource-Policy` or the import is blocked - so the build copies the
-wheel into the JupyterLite site root and serves it same-origin. See
+Under COEP (`credentialless`), the worker cannot import a cross-origin CDN wheel,
+so the build copies the wheel into the JupyterLite site root and serves it
+same-origin (Pyodide is vendored same-origin the same way). See
 [JupyterLite hosting](jupyterlite-hosting.md) and
 [Packaging & release](packaging-release.md) for the full build flow.
 

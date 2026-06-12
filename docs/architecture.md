@@ -79,12 +79,18 @@ with:
 
 ```
 Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Embedder-Policy: credentialless
 ```
 
-Envoy's static host (`:8000`) sets both (`deploy/envoy.yaml`). The e2e harness
-asserts `crossOriginIsolated === true` before doing anything else; if it is
-false, the entire bridge is dead, so this is the first checklist gate.
+Envoy's static host (`:8000`) sets both (`deploy/envoy.yaml`). We use
+`credentialless` (not `require-corp`): it keeps the page cross-origin isolated
+while letting the cross-origin grpc-web `fetch` to Envoy through as a
+no-credentials request, without requiring `Cross-Origin-Resource-Policy` on every
+response. Pyodide and the wheels are vendored **same-origin** (the build copies
+them into the site root) because under COEP the worker cannot load them from a
+cross-origin CDN. The e2e harness asserts `crossOriginIsolated === true` before
+doing anything else; if it is false, the entire bridge is dead, so this is the
+first checklist gate.
 
 ## Reattachable execute
 

@@ -98,7 +98,7 @@ mid-flight and asserts the result still completes.
 
 1. No `grpcio` inside `pyspark_connect_web/` - ever (not in Pyodide).
 2. We patch, we do not fork pyspark.
-3. Pinned pyspark range `>=4.0,<4.2`.
+3. Pinned pyspark range `>=4.0`.
 4. COOP/COEP mandatory.
 5. `.collect()` stays blocking.
 6. Reattachable execute in scope.

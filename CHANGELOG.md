@@ -79,14 +79,14 @@ unchanged - no reimplementation, no local JVM, no Python backend.
 - **Arrow result decoding** - IPC reassembly to pandas, including SPARK-53525
   multi-chunk split-batch handling, byte/row-exact against a native Connect
   reference.
-- **`pcw.install()`** - idempotent, version-guarded to `pyspark>=4.0,<4.2`; raises a clear error outside the range. Accepts
+- **`pcw.install()`** - idempotent, version-guarded to `pyspark>=4.0`; raises a clear error outside the range. Accepts
   `sc://host:port/;transport=grpcweb` plus `http(s)://` shorthand.
 - **Real Spark-Connect-verified Python vertical** - the full v0 read-path matrix
   (`range`, `select`/`filter`/`groupBy`/`agg`, `toPandas`, `createDataFrame`,
   `spark.sql(...)`, 200k-row multi-response stream, mid-stream reattach) proven
   against a real in-process Spark Connect server in `tests/integration/` with a
   pure-Python grpc-web<->gRPC bridge standing in for Envoy.
-- **Deploy stack** - dev `docker compose` (Spark 4.0.0 Connect + Envoy grpc-web
+- **Deploy stack** - dev `docker compose` (Spark 4.1.2 Connect + Envoy grpc-web
   proxy + COOP/COEP static host) and a hardened prod overlay (TLS, exact-origin
   CORS, bearer-token gate, size limits, health/readiness).
 - **Pure-Python wheel** - `py3-none-any`, `dependencies = []`, **no `grpcio`**; CI guards the no-grpcio invariant at source, wheel-metadata,

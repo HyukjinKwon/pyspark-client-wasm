@@ -67,7 +67,9 @@ wheel by URL alongside the pinned runtime deps:
 ```python
 import micropip
 await micropip.install("protobuf>=7")
-await micropip.install("pyspark>=4.0,<4.2")
+await micropip.install("googleapis-common-protos>=1.56.4")
+# Slim Spark Connect client; deps=False (grpcio/grpcio-status are shimmed).
+await micropip.install("https://<your-lite-origin>/pyspark_client-4.1.2-py3-none-any.whl", deps=False)
 await micropip.install("https://<your-lite-origin>/pyspark_connect_web-<version>-py3-none-any.whl")
 ```
 
@@ -91,13 +93,13 @@ spark = SparkSession.builder.remote("sc://<host>:8081/;transport=grpcweb").getOr
 
 | Thing | Pin | Why |
 |-------|-----|-----|
-| `pyspark` (browser + dev) | `>=4.0,<4.2` |  - reattachable execute present; `install()` raises outside the range |
+| `pyspark` (browser + dev) | `>=4.0` |  - reattachable execute present; `install()` raises outside the range |
 | Pyodide | `>=0.28` / Python 3.13 | CONTRIBUTING.md; provides `pyarrow>=22`, `pandas`, `numpy`, `protobuf>=7` |
 | `build` | `==1.2.2` | wheel build (`scripts/build_site.sh`, Makefile) |
 | `jupyterlite-core` | `==0.6.4` | `jupyter lite` CLI (`scripts/build_site.sh`) |
 | `jupyterlite-pyodide-kernel` | `==0.6.1` | Pyodide kernel for the lite site |
 | Envoy | `envoyproxy/envoy:v1.31-latest` | grpc_web filter + v3 HttpProtocolOptions |
-| Spark Connect server | `apache/spark:4.0.0` | matches the `pyspark` range |
+| Spark Connect server | `apache/spark:4.1.2` | matches the `pyspark` range |
 
 ## Release checklist
 

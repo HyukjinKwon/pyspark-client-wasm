@@ -54,13 +54,12 @@ and Spark Connect server still work and can be exercised by `tests/e2e/reference
 
 | Component | Pin | Notes |
 |-----------|-----|-------|
-| Spark Connect server | `apache/spark:4.0.0` | Bundles Connect; matches `pyspark>=4.0,<4.2` |
-| Spark Connect package | `org.apache.spark:spark-connect_2.13:4.0.0` | Must match Spark + Scala (2.13) version exactly |
+| Spark Connect server | `apache/spark:4.1.2` | Bundles the Connect server (no `--packages`); matches `pyspark>=4.0` |
 | Envoy | `envoyproxy/envoy:v1.31-latest` | Has `envoy.filters.http.grpc_web` |
 | Static host | `halverneus/static-file-server:v1.8.10` | Serves `../_output` on :80 |
 
 See `the project notes` for bring-up gotchas (stream timeouts, the
-`--packages` first-run download, COEP and CDN wheels, the gRPC vs grpc-web split).
+first-run JVM warmup, COEP and CDN wheels, the gRPC vs grpc-web split).
 
 ## Dev vs prod
 

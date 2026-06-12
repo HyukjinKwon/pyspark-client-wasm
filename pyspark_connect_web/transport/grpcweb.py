@@ -43,7 +43,7 @@ _install_grpc_shim()
 # ``SparkConnectGrpcException`` moved between ``pyspark.errors`` and
 # ``pyspark.errors.exceptions.connect`` across versions. the transport contract names
 # ``pyspark.errors``; import resiliently so we work across the pinned range
-# (pyspark>=4.0,<4.2) without forking anything.
+# (pyspark>=4.0) without forking anything.
 try:  # pragma: no cover - import shim, exercised indirectly
     from pyspark.errors import SparkConnectGrpcException  # type: ignore
 except Exception:  # pragma: no cover

@@ -18,7 +18,7 @@ conda activate pcw
 pip install -e ".[dev]"
 ```
 
-The `dev` extra installs `pyspark>=4.0,<4.2`, `pyarrow`, `pandas`, `protobuf`,
+The `dev` extra installs `pyspark>=4.0`, `pyarrow`, `pandas`, `protobuf`,
 `googleapis-common-protos`, and `pytest`. Note what is **deliberately absent**:
 
 * **No `grpcio` / `grpcio-status`.** They are not available in Pyodide and must

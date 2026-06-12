@@ -9,7 +9,7 @@
 #   * SAB/Atomics blocking bridge  (needs crossOriginIsolated === true)
 #   * JupyterLite Pyodide kernel   (real Pyodide >=0.28 / Python 3.13 in Chromium)
 #   * real Envoy grpc-web proxy    (grpc-web <-> gRPC translation, long streams)
-#   * real Spark 4.0.0 Connect server (ExecutePlan/ReattachExecute/ReleaseExecute)
+#   * real Spark 4.1.2 Connect server (ExecutePlan/ReattachExecute/ReleaseExecute)
 #   * real Chromium                (Playwright)
 #
 # It asserts the v0 matrix matrix in a real browser, with
@@ -121,29 +121,33 @@ jobs:
           # tests/, outside the package;  only forbids grpcio
           # *inside* pyspark_connect_web/.
           #
-          # Pin pyspark to EXACTLY match the server image (apache/spark:4.0.0).
-          # A newer client (.[dev] resolves the newest in >=4.0,<4.2) talks to a
-          # 4.0.0 server and reads configs it lacks (e.g. SPARK-53525's
+          # The reference generator is a NATIVE gRPC client (real grpcio), so it
+          # uses full pyspark - identical Connect-client code to the browser's
+          # pyspark-client, and it avoids a pyspark/pyspark-client namespace clash
+          # with .[dev] above. Pin to EXACTLY the server image (apache/spark:4.1.2):
+          # a mismatched client reads configs the server lacks (e.g. SPARK-53525's
           # spark.sql.session.localRelationChunkSizeRows) -> SQL_CONF_NOT_FOUND.
-          python -m pip install "pyspark==4.0.0" grpcio grpcio-status
+          python -m pip install "pyspark==4.1.2" grpcio grpcio-status
 
       - name: Build wheel + JupyterLite site (make site)
         run: make site
 
-      - name: Build + host a PySpark wheel (PyPI has sdist only)
+      - name: Build + host the pyspark-client wheel for the browser
         run: |
           set -euxo pipefail
-          # micropip needs a WHEEL; pyspark ships only an sdist on PyPI. Build a
-          # pure wheel from the (already pip-installed) pyspark 4.0.0 and host it
-          # same-origin. micropip resolves its one pure dep (py4j) from PyPI.
-          pip wheel "pyspark==4.0.0" --no-deps -w "${PCW_OUTPUT_DIR}/"
-          built="$(ls "${PCW_OUTPUT_DIR}"/pyspark-4.0.0-*.whl | head -1)"
-          # Normalize to the universal tag the worker references statically.
-          if [ "$built" != "${PCW_OUTPUT_DIR}/pyspark-4.0.0-py2.py3-none-any.whl" ]; then
-            mv "$built" "${PCW_OUTPUT_DIR}/pyspark-4.0.0-py2.py3-none-any.whl"
+          # The browser loads the SLIM Spark Connect client (`pyspark-client`,
+          # pure-Python, no JVM/py4j) - not full pyspark. micropip needs a WHEEL;
+          # build one (--no-deps: its grpcio/grpcio-status base deps have no
+          # Pyodide wheel and are shimmed at runtime) and host it same-origin. The
+          # worker installs it with deps=False to match.
+          pip wheel "pyspark-client==4.1.2" --no-deps -w "${PCW_OUTPUT_DIR}/"
+          built="$(ls "${PCW_OUTPUT_DIR}"/pyspark_client-4.1.2-*.whl | head -1)"
+          # Normalize to the fixed name the worker references statically.
+          want="${PCW_OUTPUT_DIR}/pyspark_client-4.1.2-py3-none-any.whl"
+          if [ "$built" != "$want" ]; then
+            mv "$built" "$want"
           fi
-          test -f "${PCW_OUTPUT_DIR}/pyspark-4.0.0-py2.py3-none-any.whl" \
-            || { echo "::error::pyspark wheel not built"; exit 1; }
+          test -f "$want" || { echo "::error::pyspark-client wheel not built"; exit 1; }
 
       - name: Vendor Pyodide into the site (self-host, same-origin)
         run: |

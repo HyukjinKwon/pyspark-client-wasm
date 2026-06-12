@@ -40,7 +40,7 @@ patch; we do not fork PySpark. See [`docs/architecture.md`](docs/architecture.md
 * In the browser: Pyodide >= 0.28 (Python 3.13), which already ships
   `pyarrow`, `pandas`, `protobuf`, and `numpy`. **`grpcio` is not available in
   Pyodide and is never imported** - all transport is grpc-web over `fetch`.
-* `pyspark>=4.0,<4.2` (pinned by `install()`; provided by Pyodide in the browser).
+* `pyspark>=4.0` (pinned by `install()`; provided by Pyodide in the browser).
 * A running Spark Connect server (Spark 4.x) behind an Envoy grpc-web proxy -
   the [`deploy/`](deploy/) stack brings this up for you.
 * The JupyterLite page must be **cross-origin isolated** (`COOP: same-origin` +
@@ -96,7 +96,7 @@ browser), download a Spark release (needs Java 17) and start its Connect server.
 Recent Spark bundles Spark Connect, so **no `--packages` is needed**:
 
 ```bash
-SPARK_VERSION=4.1.0   # use the latest 4.1.x: https://spark.apache.org/downloads.html
+SPARK_VERSION=4.1.2   # use the latest 4.1.x: https://spark.apache.org/downloads.html
 curl -LO "https://dlcdn.apache.org/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz"
 tar xzf "spark-${SPARK_VERSION}-bin-hadoop3.tgz" && cd "spark-${SPARK_VERSION}-bin-hadoop3"
 ./sbin/start-connect-server.sh
@@ -218,8 +218,8 @@ Full docs: <https://hyukjinkwon.github.io/pyspark-client-wasm/>
 
 | Component | Supported |
 |-----------|-----------|
-| PySpark | `>=4.0,<4.2` (Connect default; reattachable execute present). `install()` raises outside the range. |
-| Spark Connect server | Spark 4.x (`apache/spark:4.0.0` in the deploy stack) |
+| PySpark | `>=4.0` (Spark Connect's wire protocol is stable across the 4.x line; `install()` raises below 4.0). CI exercises 4.0.0 and 4.1.2. |
+| Spark Connect server | Spark 4.x (`apache/spark:4.1.2` in the deploy stack; CI also runs 4.0.0) |
 | Pyodide | >= 0.28 (Python 3.13) in the browser; Python 3.11+ for local dev |
 | Proxy | Envoy with `envoy.filters.http.grpc_web` (`v1.31-latest`) |
 

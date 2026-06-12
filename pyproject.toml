@@ -21,7 +21,7 @@ dependencies = []
 # (google.rpc.* protos); grpcio / grpcio-status are intentionally absent - the
 # _grpc_shim stubs them, mirroring Pyodide.
 dev = [
-    "pyspark>=4.0,<4.2",
+    "pyspark>=4.0",
     "pyarrow>=22",
     "pandas",
     "protobuf>=7",

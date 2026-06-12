@@ -57,7 +57,7 @@ Raises [`UnsupportedPySparkError`](#unsupportedpysparkerror) if out of range.
 
 ### `SUPPORTED_PYSPARK_RANGE`
 
-`str` - the supported PySpark version specifier, currently `">=4.0,<4.2"`.
+`str` - the supported PySpark version specifier, currently `">=4.0"`.
 
 ### `__version__`
 

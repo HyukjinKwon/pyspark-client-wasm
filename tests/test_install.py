@@ -80,13 +80,17 @@ def test_version_parsing():
     assert pcw_patch._parse_major_minor("4.0.0+abc") == (4, 0)
 
 
-def test_check_version_accepts_in_range():
+def test_check_version_accepts_supported():
+    # Minimum-only guard (>=4.0): 4.0, the 4.1 line, and any later 4.x/5.x are
+    # all accepted - Spark Connect's wire protocol is stable across 4.x.
     assert pcw_patch.check_pyspark_version("4.0.0") == (4, 0)
     assert pcw_patch.check_pyspark_version("4.1.5") == (4, 1)
+    assert pcw_patch.check_pyspark_version("4.2.0") == (4, 2)
+    assert pcw_patch.check_pyspark_version("5.0.0") == (5, 0)
 
 
-@pytest.mark.parametrize("bad", ["3.5.1", "4.2.0", "5.0.0", "4.2.0.dev0"])
-def test_check_version_rejects_out_of_range(bad):
+@pytest.mark.parametrize("bad", ["3.5.1", "3.0.0", "2.4.8", "0.9"])
+def test_check_version_rejects_below_minimum(bad):
     with pytest.raises(pcw_patch.UnsupportedPySparkError):
         pcw_patch.check_pyspark_version(bad)
 

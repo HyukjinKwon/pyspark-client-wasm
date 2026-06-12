@@ -55,8 +55,16 @@ jobs:
           --cov-report=xml --cov-fail-under=90
 
   integration:
-    name: integration (real Spark Connect server)
+    name: integration (real Spark ${{ matrix.spark }} Connect server)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Prove the >=4.0 claim against BOTH the 4.0 and 4.1 lines (matched
+        # client+server pairs). Spark Connect's wire protocol is stable across
+        # 4.x, so the pcw grpc-web client + framing must round-trip on each.
+        # (4.1.0/4.1.1 were never published; 4.1.2 is the latest 4.1.x.)
+        spark: ["4.0.0", "4.1.2"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -67,15 +75,16 @@ jobs:
         with:
           python-version: "3.11"
       - name: install
-        # The integration harness starts a real Connect server and uses a
-        # pure-Python grpc-web<->gRPC bridge that DOES need real grpcio +
+        # The integration harness starts a real in-process Connect server (from
+        # the pip pyspark, whose bundled Connect jar needs no extra download) and
+        # uses a pure-Python grpc-web<->gRPC bridge that DOES need real grpcio +
         # grpcio-status - these live only in tests/ (the Envoy stand-in), which
-        # is outside the package, so  (no grpcio in the package)
-        # still holds. The bundled Spark Connect jar means no extra download.
+        # is outside the package, so the no-grpcio-in-package rule still holds.
+        # Pin pyspark to the matrix version so server AND client are that release.
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-          pip install grpcio grpcio-status
+          pip install "pyspark==${{ matrix.spark }}" grpcio grpcio-status
       - name: pytest tests/integration
         run: pytest -q tests/integration
 

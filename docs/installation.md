@@ -40,7 +40,7 @@ conda activate pcw
 pip install "pyspark-connect-web[dev]"
 ```
 
-The `dev` extras pull in `pyspark>=4.0,<4.2`, `pyarrow>=22`, `pandas`,
+The `dev` extras pull in `pyspark>=4.0`, `pyarrow>=22`, `pandas`,
 `protobuf>=7`, `googleapis-common-protos`, and `pytest`. Note that `grpcio` is
 intentionally **not** a dependency - the package never imports it, mirroring the
 Pyodide environment (see [Architecture](architecture.md) and `the design notes` #1).
@@ -53,7 +53,7 @@ Pyodide environment (see [Architecture](architecture.md) and `the design notes` 
 
 ## Supported PySpark version
 
-`install()` is version-guarded to **`pyspark>=4.0,<4.2`** (`the design notes` #3). The
+`install()` is version-guarded to **`pyspark>=4.0`** (`the design notes` #3). The
 patch depends on private internals of `SparkConnectClient` /
 `DefaultChannelBuilder` that are only pinned for that range; calling `install()`
 on an unsupported `pyspark` raises `UnsupportedPySparkError`.
@@ -66,7 +66,12 @@ by URL alongside the pinned runtime deps via `micropip`:
 ```python
 import micropip
 await micropip.install("protobuf>=7")
-await micropip.install("pyspark>=4.0,<4.2")
+await micropip.install("googleapis-common-protos>=1.56.4")
+# The slim Spark Connect client (`pyspark-client`: pure-Python, no JVM/py4j).
+# deps=False - its grpcio/grpcio-status base deps have no Pyodide wheel and are
+# stubbed by pyspark-connect-web's _grpc_shim. pyarrow/pandas/numpy/zstandard come
+# from Pyodide (loadPackage). Host the wheel same-origin (built in CI).
+await micropip.install("https://<your-lite-origin>/pyspark_client-4.1.2-py3-none-any.whl", deps=False)
 await micropip.install("https://<your-lite-origin>/pyspark_connect_web-<version>-py3-none-any.whl")
 ```
 

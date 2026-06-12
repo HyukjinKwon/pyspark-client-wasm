@@ -41,23 +41,23 @@ const MICROPIP_PKGS = [
   // pure-Python, required by pyspark.sql.connect (google.rpc.*); NOT in Pyodide.
   // These have pure wheels on PyPI, which micropip reaches from the browser.
   "googleapis-common-protos>=1.56.4",
-  // PySpark is sdist-only on PyPI (no wheel), so micropip cannot install it by
-  // name. We build a wheel in CI and host it same-origin; micropip then pulls
-  // its one pure dep (py4j) from PyPI. Version 4.0.0 matches the Spark Connect
-  // server image (a newer client reads configs a 4.0.0 server lacks ->
-  // SQL_CONF_NOT_FOUND). Overridable via self.PCW_PYSPARK_WHEEL_URL.
-  self.PCW_PYSPARK_WHEEL_URL ||
-    new URL(
-      "/pyspark-4.0.0-py2.py3-none-any.whl",
-      self.location.origin,
-    ).href,
-  // The pyspark_connect_web wheel is served at the site root too.
+  // The pyspark_connect_web wheel is served at the site root too (no deps).
   self.PCW_WHEEL_URL ||
     new URL(
       "/pyspark_connect_web-0.0.1.dev0-py3-none-any.whl",
       self.location.origin,
     ).href,
 ];
+
+// The slim Spark Connect Python client: `pyspark-client` (NOT full `pyspark`) -
+// pure-Python, no JVM / no py4j, exactly the thin client this project drives. We
+// build a wheel in CI and host it same-origin so the worker never reaches across
+// origins for it. Version 4.1.2 matches the Spark Connect server image (a
+// mismatched client reads configs the server lacks -> SQL_CONF_NOT_FOUND).
+// Overridable via self.PCW_PYSPARK_WHEEL_URL.
+const PYSPARK_CLIENT_WHEEL =
+  self.PCW_PYSPARK_WHEEL_URL ||
+  new URL("/pyspark_client-4.1.2-py3-none-any.whl", self.location.origin).href;
 
 function assertIsolated() {
   if (typeof SharedArrayBuffer === "undefined" || self.crossOriginIsolated !== true) {
@@ -92,6 +92,13 @@ async function boot() {
   for (const pkg of MICROPIP_PKGS) {
     await micropip.install(pkg);
   }
+  // deps=False: pyspark-client lists grpcio/grpcio-status as BASE requirements
+  // (unlike full pyspark, where they are extras), and neither has a Pyodide
+  // wheel. The _grpc_shim stubs them at runtime; everything else pyspark-client
+  // needs (pyarrow/pandas/numpy via loadPackage, protobuf + googleapis-common-
+  // protos above) is already present. callKwargs is how a JS caller passes a
+  // Python keyword arg through the PyProxy.
+  await micropip.install.callKwargs(PYSPARK_CLIENT_WHEEL, { deps: false });
 
   // Make the SABs reachable from Python via the `js` module. _AtomicsBackend
   // looks for `js.__pcw_register_sab` / reads these globals.

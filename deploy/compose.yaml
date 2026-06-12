@@ -16,17 +16,17 @@
 #   http://localhost:8000/
 #
 # Version pins:
-#   * apache/spark:4.0.0          -> Spark 4.0.0, bundles Spark Connect server
+#   * apache/spark:4.1.2          -> Spark 4.1.2, bundles the Spark Connect server
 #   * envoyproxy/envoy:v1.31-latest
 #   * Pyodide >= 0.28 / Python 3.13 in the browser (provided by the components)
 #
-# NOTE: the Spark Connect *package* coordinate must match the Spark version.
-# For Spark 4.0.0 + Scala 2.13 that is:
-#   org.apache.spark:spark-connect_2.13:4.0.0
+# NOTE: Spark 4.0+ bundles the Spark Connect server jars in the distribution, so
+# `start-connect-server.sh` needs NO `--packages` (that was only required on
+# 3.4/3.5). Keep the server version in lockstep with the `pyspark>=4.0,<4.2` pin.
 
 services:
   spark-connect:
-    image: apache/spark:4.0.0
+    image: apache/spark:4.1.2
     container_name: pcw-spark-connect
     # start-connect-server.sh ships in the apache/spark image under
     # $SPARK_HOME/sbin. It launches the Connect server in the foreground when
@@ -37,14 +37,13 @@ services:
       - -c
       - >-
         /opt/spark/sbin/start-connect-server.sh
-        --packages org.apache.spark:spark-connect_2.13:4.0.0
         --conf spark.connect.grpc.binding.address=0.0.0.0
         --conf spark.connect.grpc.binding.port=15002
         --conf spark.jars.ivy=/tmp/.ivy2
     environment:
-      # The apache/spark image runs as a user whose HOME is /nonexistent, so Ivy
-      # (used to resolve --packages) cannot write its cache and the server dies
-      # with FileNotFoundException. Point HOME (and the Ivy dir, above) at /tmp.
+      # The apache/spark image runs as a user whose HOME is /nonexistent, so any
+      # Ivy/JVM scratch writes fail and the server dies with FileNotFoundException.
+      # Point HOME (and the Ivy dir, above) at /tmp.
       HOME: "/tmp"
       # Run the Connect server in the FOREGROUND so the container stays alive on
       # that process. The daemon wrapper backgrounds then exits, which made the
@@ -64,8 +63,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      # Generous: first start resolves the Spark Connect package via Ivy
-      # (network) and warms up the JVM.
+      # Generous: first start warms up the JVM and the bundled Connect server.
       start_period: 120s
 
   static:

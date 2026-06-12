@@ -28,7 +28,7 @@ Set up an environment with **conda** and point at a running Spark Connect server
 
 ```bash
 conda create -n pcw python=3.11 && conda activate pcw
-pip install "pyspark[connect]>=4.0,<4.2" pyarrow pandas
+pip install "pyspark[connect]>=4.0" pyarrow pandas
 
 # bring up a server (or use your own):  docker compose -f ../deploy/compose.yaml up -d
 export SPARK_REMOTE="sc://localhost:15002"      # native gRPC endpoint

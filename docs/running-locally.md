@@ -26,7 +26,7 @@ This starts:
 
 | Service | Port | What |
 |---------|------|------|
-| `spark-connect` | 15002 | Spark 4.0.0 Connect server (gRPC) |
+| `spark-connect` | 15002 | Spark 4.1.2 Connect server (gRPC) |
 | `envoy` | 8081 | grpc-web endpoint for the browser client |
 | `envoy` | 8000 | JupyterLite static host with COOP/COEP |
 | `envoy` | 9901 | Envoy admin |
@@ -98,4 +98,4 @@ browser (CONTRIBUTING.md / ).
 | grpc-web call blocked by CORS | Origin not allowed. The Envoy CORS policy is permissive (`*`); confirm you hit `:8081`, not `:15002` directly. |
 | Long `.collect()` hangs then errors | Envoy stream timeout. `envoy.yaml` sets `stream_idle_timeout: 0s` and `timeout: 0s` on the grpc-web route for exactly this. |
 | `reference.py` cannot connect | Spark Connect not up on `:15002`, or `grpcio` not installed in the dev venv. Generate the reference on a machine that has `grpcio`. |
-| Spark Connect container unhealthy | First-run `--packages` download still in flight, or insufficient memory. Give it ~60s and check `docker logs pcw-spark-connect`. |
+| Spark Connect container unhealthy | First-run JVM warmup still in flight, or insufficient memory. Give it ~60s and check `docker logs pcw-spark-connect`. |

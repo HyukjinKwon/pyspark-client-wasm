@@ -4,7 +4,7 @@
   harness.html - a minimal standalone page that boots the pyspark-connect-web
   browser stack WITHOUT JupyterLite, for the headless e2e (tests/e2e):
 
-    Pyodide (Web Worker) + micropip(pyspark==4.0.0 + the wheel)
+    Pyodide (Web Worker) + micropip(pyspark-client==4.1.2 + the wheel)
       -> pcw.install()
       -> SparkSession.builder.remote("sc://.../;transport=grpcweb")
       -> SAB/Atomics blocking bridge (bridge.js on this main thread does the

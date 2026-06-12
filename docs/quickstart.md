@@ -22,7 +22,7 @@ See [Installation](installation.md) for the browser-side `micropip` install.
 docker compose -f deploy/compose.yaml up
 ```
 
-This starts a Spark 4.0.0 Connect server and an Envoy proxy that exposes:
+This starts a Spark 4.1.2 Connect server and an Envoy proxy that exposes:
 
 | URL | What |
 |-----|------|

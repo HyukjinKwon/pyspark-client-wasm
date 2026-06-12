@@ -10,7 +10,7 @@ is touched. We **patch, we do not fork** (``the design notes`` #2).
 What ``install()`` does, in order:
 
 1. **Version-guard** the running ``pyspark`` to the range in ``the design notes`` #3
-   (``>=4.0,<4.2``) and raise a clear error otherwise. The seam we patch is
+   (``>=4.0``) and raise a clear error otherwise. The seam we patch is
    private (``DefaultChannelBuilder.toChannel``,
    ``base_pb2_grpc.SparkConnectServiceStub`` construction); the guard is what
    lets us depend on those internals safely.
@@ -49,12 +49,12 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from ._contract import SyncChannel
 
 # ---------------------------------------------------------------------------
-# Supported pyspark range (mirrors ). Inclusive lower, exclusive
-# upper, by (major, minor).
+# Supported pyspark range. Spark Connect's wire protocol is stable across the
+# 4.x line, so we require only a minimum (>=4.0) by (major, minor) - no upper
+# bound. The patch rides on the Connect client seam, which has held since 4.0.
 # ---------------------------------------------------------------------------
 SUPPORTED_PYSPARK_MIN: Tuple[int, int] = (4, 0)
-SUPPORTED_PYSPARK_MAX_EXCLUSIVE: Tuple[int, int] = (4, 2)
-SUPPORTED_PYSPARK_RANGE = ">=4.0,<4.2"
+SUPPORTED_PYSPARK_RANGE = ">=4.0"
 
 #: The grpc-web transport marker used in the connection string params.
 WEB_TRANSPORT = "grpcweb"
@@ -100,12 +100,11 @@ def check_pyspark_version(version: Optional[str] = None) -> Tuple[int, int]:
             ) from e
 
     mm = _parse_major_minor(version)
-    if not (SUPPORTED_PYSPARK_MIN <= mm < SUPPORTED_PYSPARK_MAX_EXCLUSIVE):
+    if mm < SUPPORTED_PYSPARK_MIN:
         raise UnsupportedPySparkError(
             f"pyspark {version} is not supported by pyspark-connect-web "
-            f"(requires {SUPPORTED_PYSPARK_RANGE}). The patch depends on private "
-            f"internals of SparkConnectClient/DefaultChannelBuilder that are only "
-            f"pinned for that range."
+            f"(requires {SUPPORTED_PYSPARK_RANGE}). The patch depends on the "
+            f"Spark Connect client seam introduced in 4.0."
         )
     return mm
 

@@ -172,7 +172,11 @@ def reassemble_record_batches(responses: Iterable[Any]) -> List["pa.RecordBatch"
     return _reassemble(responses)[0]
 
 
-def decode_arrow_batches(responses: Iterable[Any]) -> "pd.DataFrame":
+def decode_arrow_batches(
+    responses: Iterable[Any],
+    *,
+    session_timezone: "str | None" = None,
+) -> "pd.DataFrame":
     """Decode a stream of ``ExecutePlanResponse`` protos to a pandas DataFrame.
 
     Consumes ``responses`` (an iterable of objects with the
@@ -185,9 +189,22 @@ def decode_arrow_batches(responses: Iterable[Any]) -> "pd.DataFrame":
     Type fidelity: we convert with ``coerce_temporal_nanoseconds=True`` (the same
     flag PySpark's ``to_pandas`` passes for pyarrow >= 13), so date/timestamp/
     duration units land on pandas' nanosecond types exactly as the native client
-    produces them. See ``the project notes`` for the type-mapping
-    boundary (struct handling mode, session timezone) that requires a live client
-    config and so lives in the integration, not here.
+    produces them.
+
+    Session time zone (``spark.sql.session.timeZone``): Spark's ``TimestampType``
+    carries local-time-zone semantics and is encoded in the Arrow IPC stream as a
+    tz-aware ``timestamp[unit, tz=UTC]`` (a UTC instant), while Spark's
+    ``TimestampNTZType`` is encoded as a tz-naive ``timestamp[unit]``. PySpark's
+    native client (``pyspark.sql.connect.client.core`` ->
+    ``_create_converter_to_pandas`` -> ``_check_series_convert_timestamps_local_tz``)
+    converts every tz-aware timestamp column to the session time zone and then
+    drops the offset, yielding a tz-naive ``datetime64[ns]`` whose wall clock is in
+    the session zone. tz-naive (NTZ) columns are left untouched. We reproduce that
+    exactly: pass ``session_timezone`` (the value of ``spark.sql.session.timeZone``)
+    and any tz-aware timestamp column is ``tz_convert``-ed to it and localized to
+    naive; tz-naive columns are passed through. When ``session_timezone`` is
+    ``None`` we fall back to the local time zone, matching PySpark's
+    ``timezone or _get_local_timezone()`` rule.
     """
     import pandas as pd  # local import: pandas is a Pyodide-provided dep
 
@@ -214,7 +231,58 @@ def decode_arrow_batches(responses: Iterable[Any]) -> "pd.DataFrame":
     if _pyarrow_supports_coerce_temporal_nanoseconds():
         to_pandas_kwargs["coerce_temporal_nanoseconds"] = True
 
-    return table.to_pandas(**to_pandas_kwargs)
+    pdf = table.to_pandas(**to_pandas_kwargs)
+    return _localize_timestamp_columns(pdf, session_timezone)
+
+
+def _localize_timestamp_columns(
+    pdf: "pd.DataFrame", session_timezone: "str | None"
+) -> "pd.DataFrame":
+    """Apply ``spark.sql.session.timeZone`` to tz-aware timestamp columns.
+
+    Mirrors PySpark's ``_check_series_convert_timestamps_local_tz`` for the
+    tz-aware branch: a tz-aware Arrow timestamp column (Spark ``TimestampType``,
+    an absolute UTC instant) is converted to the session zone and then made naive,
+    so its wall clock reads in the session zone - exactly what the native client
+    returns. tz-naive columns (Spark ``TimestampNTZType``) are left alone.
+
+    The session zone is read from the Arrow-derived pandas dtype only, so no live
+    client config is needed at the decode site; the absolute instant is identical
+    regardless of the source ``tz`` label, and ``tz_convert`` re-expresses it in
+    the target zone. ``None`` -> local time zone (PySpark's fallback).
+
+    Boundary (matches PySpark's own ``TODO: handle nested timestamps`` notes in
+    ``pyspark.sql.pandas.types``): only top-level timestamp columns are localized.
+    Timestamps nested inside struct/list/map values are left in their decoded
+    (UTC) form; localizing those would require per-element object conversion that
+    the native client only performs via its Spark-schema-driven recursive
+    converter, which this pure-Arrow decoder does not reconstruct.
+    """
+    import pandas as pd
+
+    tz = session_timezone or _get_local_timezone()
+
+    tz_aware = [
+        name
+        for name, dtype in pdf.dtypes.items()
+        if isinstance(dtype, pd.DatetimeTZDtype)
+    ]
+    for name in tz_aware:
+        pdf[name] = pdf[name].dt.tz_convert(tz).dt.tz_localize(None)
+    return pdf
+
+
+def _get_local_timezone() -> str:
+    """Local time zone string, identical to PySpark's ``_get_local_timezone``.
+
+    If the ``TZ`` environment variable is set, use it; otherwise return the
+    special ``dateutil/:`` string, which pandas understands and resolves to the
+    system local zone via dateutil. Keeping the exact same rule means our naive
+    wall-clock fallback matches the native client when no session zone is passed.
+    """
+    import os
+
+    return os.environ.get("TZ", "dateutil/:")
 
 
 def _pyarrow_supports_coerce_temporal_nanoseconds() -> bool:

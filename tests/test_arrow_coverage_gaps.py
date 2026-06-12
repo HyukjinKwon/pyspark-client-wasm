@@ -10,10 +10,9 @@ type-parity behaviour flagged as the known boundary in
   * empty-result-with-known-schema (named empty DataFrame) branch,
   * the pyarrow-version probe fallback,
   * timezone / struct / decimal / nested type-fidelity *pins* against pyarrow's
-    own ``to_pandas`` (the documented decoder contract), and an explicit
-    ``xfail`` recording the one genuine parity gap: the applies NO
-    ``spark.sql.session.timeZone`` localization (that needs a live client config),
-    so a tz-aware timestamp does NOT match a session-tz-localized native result.
+    own ``to_pandas`` (the documented decoder contract), including
+    ``spark.sql.session.timeZone`` localization of tz-aware timestamps, asserted
+    byte-identical to PySpark's native ``_check_series_convert_timestamps_local_tz``.
 
 No grpcio, no browser, no server.
 """
@@ -161,33 +160,78 @@ def test_tz_naive_timestamp_coerces_to_datetime64ns():
     )
 
 
-@pytest.mark.xfail(
-    reason=(
-        "KNOWN PARITY GAP (findings-the transport-arrow.md / findings-integration.md): "
-        "the is a pure decoder and applies NO spark.sql.session.timeZone "
-        "localization - that needs a live client config it does not have. A "
-        "tz-aware Arrow timestamp therefore decodes to its encoded (UTC) wall "
-        "clock, NOT the session-tz-localized value the native client would "
-        "produce. Localization, if required for exact parity, belongs in the "
-        "integration. This xfail pins the gap so it is tracked, not hidden.",
-    ),
-    strict=True,
-)
-def test_session_timezone_localization_parity_gap():
-    """Demonstrate the documented tz-localization gap.
+def test_session_timezone_localization_applied():
+    """A tz-aware Arrow timestamp is localized to ``spark.sql.session.timeZone``.
 
-    We encode a tz-aware (UTC) timestamp and assert the decoded value would have
-    been localized to a non-UTC session timezone (e.g. America/Los_Angeles) the
-    way PySpark's native ``_create_converter_to_pandas`` does. Lane 4 does not do
-    this, so the wall-clock differs -> this assertion fails -> xfail(strict)."""
+    This pins the timezone fix: Spark ``TimestampType`` arrives as a tz-aware
+    (UTC) Arrow timestamp, and ``decode_arrow_batches(session_timezone=...)`` must
+    convert it to the session zone then drop the offset - exactly as PySpark's
+    native ``_check_series_convert_timestamps_local_tz`` does. (Formerly a strict
+    xfail pinning the gap; the gap is now closed.)"""
+    utc_ts = datetime.datetime(2021, 1, 1, 0, 0, tzinfo=datetime.timezone.utc)
+    table = pa.table({"ts": pa.array([utc_ts], pa.timestamp("us", tz="UTC"))})
+    batch = table.combine_chunks().to_batches()[0]
+    got = decode_arrow_batches(
+        [FakeResponse(FakeArrowBatch(_ipc_stream_bytes(batch), batch.num_rows))],
+        session_timezone="America/Los_Angeles",
+    )
+    decoded = pd.Timestamp(got["ts"].iloc[0])
+    # America/Los_Angeles is UTC-8 in January, so the UTC midnight reads as the
+    # prior day's 16:00 wall clock, with the offset dropped (tz-naive).
+    expected_la_wall = pd.Timestamp("2020-12-31 16:00:00")
+    assert decoded.tzinfo is None
+    assert str(got["ts"].dtype) == "datetime64[ns]"
+    assert decoded == expected_la_wall
+
+
+def test_session_timezone_matches_pyspark_native_converter():
+    """Our localization must be byte-identical to PySpark's own converter."""
+    from pyspark.sql.pandas.types import _check_series_convert_timestamps_local_tz
+
+    tz = "Asia/Kolkata"  # UTC+5:30, a half-hour offset to catch sloppy math
+    values = [
+        datetime.datetime(2021, 1, 1, 0, 0, tzinfo=datetime.timezone.utc),
+        None,
+        datetime.datetime(2022, 7, 4, 23, 30, tzinfo=datetime.timezone.utc),
+    ]
+    table = pa.table({"ts": pa.array(values, pa.timestamp("us", tz="UTC"))})
+    batch = table.combine_chunks().to_batches()[0]
+    got = decode_arrow_batches(
+        [FakeResponse(FakeArrowBatch(_ipc_stream_bytes(batch), batch.num_rows))],
+        session_timezone=tz,
+    )
+    # Reference: what the native client computes from the same Arrow->pandas series.
+    ref_series = table.to_pandas(coerce_temporal_nanoseconds=True)["ts"]
+    expected = _check_series_convert_timestamps_local_tz(ref_series, timezone=tz)
+    pd.testing.assert_series_equal(
+        got["ts"].reset_index(drop=True),
+        expected.reset_index(drop=True),
+        check_names=False,
+    )
+
+
+def test_tz_naive_timestamp_is_not_localized():
+    """tz-naive (Spark TimestampNTZType) columns must pass through unchanged even
+    when a session timezone is supplied - the native client never localizes NTZ."""
+    table = pa.table(
+        {"ts": pa.array([datetime.datetime(2021, 1, 1, 12, 0)], pa.timestamp("us"))}
+    )
+    batch = table.combine_chunks().to_batches()[0]
+    got = decode_arrow_batches(
+        [FakeResponse(FakeArrowBatch(_ipc_stream_bytes(batch), batch.num_rows))],
+        session_timezone="America/Los_Angeles",
+    )
+    assert str(got["ts"].dtype) == "datetime64[ns]"
+    assert pd.Timestamp(got["ts"].iloc[0]) == pd.Timestamp("2021-01-01 12:00:00")
+
+
+def test_default_session_timezone_uses_local_zone(monkeypatch):
+    """With no session_timezone, fall back to the TZ env var (PySpark's rule)."""
+    monkeypatch.setenv("TZ", "America/Los_Angeles")
     utc_ts = datetime.datetime(2021, 1, 1, 0, 0, tzinfo=datetime.timezone.utc)
     table = pa.table({"ts": pa.array([utc_ts], pa.timestamp("us", tz="UTC"))})
     batch = table.combine_chunks().to_batches()[0]
     got = decode_arrow_batches(
         [FakeResponse(FakeArrowBatch(_ipc_stream_bytes(batch), batch.num_rows))]
     )
-    decoded = pd.Timestamp(got["ts"].iloc[0])
-    # What a session tz of America/Los_Angeles (UTC-8) would yield as wall clock.
-    expected_la_wall = pd.Timestamp("2020-12-31 16:00:00")
-    # Lane 4 keeps UTC wall clock, so naive comparison to the LA wall clock fails.
-    assert decoded.tz_localize(None) == expected_la_wall
+    assert pd.Timestamp(got["ts"].iloc[0]) == pd.Timestamp("2020-12-31 16:00:00")

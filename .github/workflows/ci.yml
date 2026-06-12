@@ -89,15 +89,24 @@ jobs:
           python-version: "3.11"
       - name: install ruff
         run: pip install ruff==0.6.9
-      # Scoped to the transport-owned Python (scripts/ + the e2e reference generator).
-      # Whole-repo lint is intentionally NOT enabled yet: pyspark_connect_web/
-      # (the components) has a couple of pre-existing ruff findings that the does
-      # not own and must not edit. Flip the paths to `.` once those are clean and
-      # the integrator lands a [tool.ruff] config in pyproject.toml.
+      # Scoped to scripts/ + the e2e reference generator for now; whole-repo lint
+      # can be enabled once a [tool.ruff] config lands in pyproject.toml.
       - name: ruff check
         run: ruff check scripts/ tests/e2e/reference.py
       - name: ruff format --check
         run: ruff format --check scripts/ tests/e2e/reference.py
+
+  js-bridge:
+    name: js bridge unit tests (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: install + test
+        # No lockfile committed; `npm install` resolves vitest at run time.
+        run: cd tests/js && npm install && npm test
 
   grpcio-guard:
     name: no grpcio under pyspark_connect_web/

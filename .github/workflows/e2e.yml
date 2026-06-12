@@ -149,25 +149,9 @@ jobs:
           fi
           test -f "$want" || { echo "::error::pyspark-client wheel not built"; exit 1; }
 
-      - name: Vendor Pyodide into the site (self-host, same-origin)
-        run: |
-          set -euxo pipefail
-          # Self-host Pyodide so the worker loads it SAME-ORIGIN (/pyodide/).
-          # Under cross-origin isolation, the worker's importScripts() of a CDN
-          # pyodide.js is blocked by COEP (require-corp -> jsdelivr sends no CORP;
-          # credentialless -> Chromium still blocks the worker script load).
-          # Same-origin sidesteps COEP entirely. The full dist includes pyarrow,
-          # pandas, numpy, zstandard, micropip (loaded via loadPackage).
-          ver=314.0.0
-          url="https://github.com/pyodide/pyodide/releases/download/${ver}/pyodide-${ver}.tar.bz2"
-          curl -fsSL --retry 3 "$url" -o /tmp/pyodide.tar.bz2
-          tar xjf /tmp/pyodide.tar.bz2 -C "${PCW_OUTPUT_DIR}"   # extracts to ${PCW_OUTPUT_DIR}/pyodide/
-          test -f "${PCW_OUTPUT_DIR}/pyodide/pyodide.js" \
-            || { echo "::error::pyodide.js not vendored"; exit 1; }
-          test -f "${PCW_OUTPUT_DIR}/pyodide/pyodide-lock.json" \
-            || { echo "::error::pyodide-lock.json not vendored"; exit 1; }
-          ls "${PCW_OUTPUT_DIR}/pyodide"/pyarrow*.* >/dev/null 2>&1 \
-            || echo "::warning::pyarrow not found in vendored pyodide dist"
+      # Pyodide is vendored same-origin into _output/pyodide/ by build_site.sh
+      # (`make site` above), so the worker + the JupyterLite kernel both load it
+      # from /pyodide/ rather than a cross-origin CDN (blocked under COEP).
 
       - name: Verify _output contains the COOP/COEP _headers and the wheel
         run: |
@@ -275,6 +259,22 @@ jobs:
             --out "${E2E_REFERENCE}"
           echo "===== reference.json ====="
           cat "${E2E_REFERENCE}"
+
+      - name: Smoke-test the examples against the live Spark Connect server
+        run: |
+          set -euxo pipefail
+          # examples/*.py are plain PySpark Connect scripts (the same code that
+          # runs in the browser, minus pcw.install()). Run each against the
+          # compose stack's raw gRPC endpoint with the NATIVE client already
+          # installed above, to prove every example executes end-to-end. Each
+          # script reads $SPARK_REMOTE (default sc://localhost:15002).
+          export SPARK_REMOTE="sc://localhost:15002"
+          for ex in examples/*.py; do
+            echo "::group::run ${ex}"
+            python "${ex}"
+            echo "::endgroup::"
+          done
+          echo "all examples ran successfully against Spark Connect"
 
       # -------------------------------------------------------------------
       # 4. install Playwright + chromium and run the e2e (HARD-FAIL mode)

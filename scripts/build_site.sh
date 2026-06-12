@@ -71,6 +71,28 @@ jupyter lite build \
   --contents "$LITE_DIR/demo.ipynb" \
   --output-dir "$OUTPUT_DIR"
 
+# --- 2b. vendor Pyodide SAME-ORIGIN -----------------------------------------
+# Under COOP/COEP the worker cannot import Pyodide from a cross-origin CDN
+# (jsdelivr sends no CORP; credentialless still blocks the worker script load),
+# so we host the full Pyodide dist same-origin. Both consumers load it from
+# /pyodide/: the JupyterLite kernel (jupyter-lite.json -> pyodideUrl
+# /pyodide/pyodide.js) and the standalone harness (worker_bootstrap.js -> the
+# /pyodide/ index). The full dist also carries pyarrow/pandas/numpy/zstandard.
+# Skipped if already vendored (offline-friendly); needs network on first build.
+PYODIDE_VER="${PCW_PYODIDE_VERSION:-314.0.0}"
+if [ -f "$OUTPUT_DIR/pyodide/pyodide.js" ]; then
+  log "Pyodide already vendored at $OUTPUT_DIR/pyodide (skipping download)"
+else
+  log "vendoring Pyodide ${PYODIDE_VER} into $OUTPUT_DIR/pyodide"
+  command -v curl >/dev/null 2>&1 \
+    || die "curl needed to download Pyodide (or pre-place the dist in $OUTPUT_DIR/pyodide/)"
+  pyo_url="https://github.com/pyodide/pyodide/releases/download/${PYODIDE_VER}/pyodide-${PYODIDE_VER}.tar.bz2"
+  curl -fsSL --retry 3 "$pyo_url" -o "$LITE_BUILD_DIR/pyodide.tar.bz2" \
+    || die "failed to download Pyodide ${PYODIDE_VER} from $pyo_url"
+  tar xjf "$LITE_BUILD_DIR/pyodide.tar.bz2" -C "$OUTPUT_DIR"   # -> $OUTPUT_DIR/pyodide/
+  [ -f "$OUTPUT_DIR/pyodide/pyodide.js" ] || die "Pyodide not vendored (no pyodide.js)"
+fi
+
 # --- 3. drop in COOP/COEP _headers + the wheel so micropip can fetch it -----
 log "copying _headers + wheel into $OUTPUT_DIR"
 cp "$LITE_DIR/_headers" "$OUTPUT_DIR/_headers"
@@ -130,6 +152,8 @@ grep -q 'Cross-Origin-Embedder-Policy: credentialless' "$OUTPUT_DIR/_headers" \
   || die "COEP missing from $OUTPUT_DIR/_headers"
 ls "$OUTPUT_DIR"/pyspark_connect_web-*.whl >/dev/null 2>&1 \
   || die "wheel not copied into $OUTPUT_DIR"
+[ -f "$OUTPUT_DIR/pyodide/pyodide.js" ] \
+  || die "Pyodide not vendored same-origin at $OUTPUT_DIR/pyodide/ (CDN is blocked under COEP)"
 [ -f "$OUTPUT_DIR/coi-serviceworker.js" ] && [ -f "$OUTPUT_DIR/jupyterlite/pcw_kernel_bridge.js" ] \
   && [ -f "$OUTPUT_DIR/jupyterlite/pcw_runpython_bootstrap.js" ] \
   && [ -f "$OUTPUT_DIR/jupyterlite/run_python_bridge.js" ] \

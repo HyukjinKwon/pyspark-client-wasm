@@ -21,6 +21,13 @@ export default defineConfig({
   timeout: 150_000,
   expect: { timeout: 30_000 },
   fullyParallel: false,
+  // Browser e2e against a freshly-booted full stack (Pyodide cold start + Spark
+  // Connect/Envoy warmup) is occasionally flaky on the first commands; a
+  // transient stall once wedged spark.sql for the whole timeout. Retry in CI so
+  // an intermittent stall re-runs (in serial mode Playwright re-runs the whole
+  // booted describe block) instead of failing the gate; a real break still fails
+  // all attempts. Local runs do not retry (fail fast while iterating).
+  retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL: BASE_URL,

@@ -31,13 +31,14 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 LITE_DIR="pyspark_connect_web/jupyterlite"
 
 # --- pinned build tooling --------------------------------------------------
-# jupyterlite-core / -pyodide-kernel are UNPINNED to pick up the latest release:
-# the 0.6.1 kernel spawned a CLASSIC worker, which Pyodide 314 rejects ("Classic
-# web workers are not supported"). Recent kernels use MODULE workers. We vendor
-# whatever Pyodide that kernel expects (derived below), so the kernel and the
-# standalone harness load the same same-origin, module-capable Pyodide.
-JUPYTERLITE_CORE_PIN="jupyterlite-core"
-JUPYTERLITE_PYODIDE_PIN="jupyterlite-pyodide-kernel"
+# jupyterlite 0.7.x: the kernel uses MODULE workers. (0.6.1 spawned a CLASSIC
+# worker, which Pyodide rejects with "Classic web workers are not supported", so
+# the lite kernel never booted.) We vendor the EXACT Pyodide this kernel expects
+# (derived below; 0.7.2 -> Pyodide 0.29.3), so the kernel and the standalone
+# harness load the same same-origin, module-capable build. Bump deliberately,
+# together with the e2e.yml / release.yml pins.
+JUPYTERLITE_CORE_PIN="jupyterlite-core==0.7.6"
+JUPYTERLITE_PYODIDE_PIN="jupyterlite-pyodide-kernel==0.7.2"
 BUILD_PIN="build==1.2.2"
 
 log() { printf '[build_site] %s\n' "$*"; }

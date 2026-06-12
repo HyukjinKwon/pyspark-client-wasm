@@ -25,8 +25,10 @@ const DATA_BYTES = 16 * 1024 * 1024; // 16 MiB payload region
 // A cross-origin CDN does NOT work here: under cross-origin isolation the
 // worker's importScripts() of a CDN pyodide.js is blocked by COEP (neither
 // require-corp - jsdelivr sends no CORP - nor credentialless permits it in
-// Chromium). Same-origin sidesteps COEP entirely (and is faster). v314.0.0
-// ships pyarrow 22.0.0 + zstandard 0.25.0 + pandas 3.0.2 + numpy 2.4.3 (Py3.14).
+// Chromium). Same-origin sidesteps COEP entirely (and is faster). The vendored
+// dist (build_site.sh pins it to the version the JupyterLite kernel expects, so
+// the kernel and this harness share one Pyodide) ships pyarrow + pandas + numpy
+// + zstandard, loaded via loadPackage below.
 // Override with self.PCW_PYODIDE_INDEX_URL if you host it elsewhere same-origin.
 const PYODIDE_INDEX_URL =
   self.PCW_PYODIDE_INDEX_URL || new URL("/pyodide/", self.location.origin).href;
@@ -81,9 +83,11 @@ async function boot() {
   dataSab = new SharedArrayBuffer(DATA_BYTES);
   self.postMessage({ type: "pcw_sab", control: controlSab, data: dataSab });
 
-  // MODULE worker: recent Pyodide (v314.x) refuses classic workers ("Classic
-  // web workers are not supported"), so load the ESM build via dynamic import
-  // (not importScripts, which does not exist in a module worker anyway).
+  // MODULE worker: recent Pyodide refuses classic workers ("Classic web workers
+  // are not supported"), so load the ESM build via dynamic import (not
+  // importScripts, which does not exist in a module worker anyway). This is also
+  // why the JupyterLite kernel needs jupyterlite-pyodide-kernel >= 0.7 (its
+  // kernel worker is a module worker too).
   const { loadPyodide } = await import(PYODIDE_INDEX_URL + "pyodide.mjs");
   pyodide = await loadPyodide({ indexURL: PYODIDE_INDEX_URL });
 

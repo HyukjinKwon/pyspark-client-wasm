@@ -105,14 +105,13 @@ jobs:
         run: |
           set -euxo pipefail
           python -m pip install --upgrade pip
-          # jupyterlite-core / -pyodide-kernel UNPINNED (match build_site.sh): the
-          # old 0.6.1 kernel used a CLASSIC worker that Pyodide 314 rejects; recent
-          # kernels use MODULE workers. build_site.sh vendors the Pyodide the
-          # installed kernel expects.
+          # jupyterlite 0.7.x kernel uses MODULE workers (0.6.1 used a CLASSIC
+          # worker that Pyodide rejects). Pins MUST match scripts/build_site.sh;
+          # build_site.sh vendors the Pyodide this kernel expects (0.29.3).
           python -m pip install \
             "build==1.2.2" \
-            "jupyterlite-core" \
-            "jupyterlite-pyodide-kernel" \
+            "jupyterlite-core==0.7.6" \
+            "jupyterlite-pyodide-kernel==0.7.2" \
             "jupyter-server>=2,<3"
           # jupyter-server is required by jupyterlite's `contents` addon to add
           # custom content (the demo notebook via `jupyter lite build --contents`).

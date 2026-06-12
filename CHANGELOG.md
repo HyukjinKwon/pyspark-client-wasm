@@ -19,25 +19,8 @@ carry **no** `grpcio` dependency - .
 
 ## [Unreleased]
 
-### Fixed
-- **SAB bridge deadlock on `spark.sql`** - an eager command runs two
-  server-streaming RPCs back-to-back; the second's `S_REQ_READY` could race the
-  abandoned first stream's `S_IDLE`, leaving the main thread parked forever
-  (intermittent ~30-50% hang). The bridge now treats `S_REQ_READY` as
-  "exchange abandoned" and re-dispatches; STATE writes are generation-guarded.
-  Regression-covered in `tests/js/bridge.test.mjs`.
-
 ### Added
-- **Real JupyterLite-kernel e2e** (`tests/e2e/kernel.spec.ts`): boots the actual
-  lite kernel, installs in-kernel, and runs `range`/`spark.sql`/`groupBy` through
-  the kernel SAB bridge - not just the standalone harness.
-
-### Changed
-- **JupyterLite bumped to core 0.7.6 / pyodide-kernel 0.7.2** (module-worker
-  kernel; the 0.6.1 classic worker was incompatible with recent Pyodide). Pyodide
-  is vendored same-origin at the exact version the kernel expects (0.29.3), shared
-  by the kernel and the harness. `exposeAppInBrowser` lets the kernel bootstrap
-  reach the app.
+- _Nothing yet._
 
 <!--
 Release runbook (kept here so it travels with the changelog; docs/ is owned by
@@ -73,6 +56,36 @@ One-time setup (maintainer): store a PyPI API token as the `PYPI_TOKEN` repo
 secret (Settings -> Secrets and variables -> Actions). The TestPyPI dry-run path
 still uses OIDC trusted publishing for the `testpypi` environment.
 -->
+
+## [0.2.0] - 2026-06-12
+
+Reliability + JupyterLite-kernel release. Fixes the intermittent in-browser
+`spark.sql` hang and adds verified end-to-end coverage of the real JupyterLite
+Pyodide kernel (not just the standalone harness).
+
+### Fixed
+- **SAB bridge deadlock on `spark.sql`** - an eager command runs two
+  server-streaming RPCs back-to-back; the second's `S_REQ_READY` could race the
+  abandoned first stream's `S_IDLE`, leaving the main thread parked forever
+  (intermittent ~30-50% hang, always `spark.sql`). The bridge now treats
+  `S_REQ_READY` as "exchange abandoned" and re-dispatches the pending request;
+  worker STATE writes are generation-guarded so a stale stream cannot stomp a
+  newer RPC. Reproduced + regression-covered in `tests/js/bridge.test.mjs`.
+
+### Added
+- **Real JupyterLite-kernel e2e** (`tests/e2e/kernel.spec.ts`): boots the actual
+  lite kernel, installs in-kernel, binds `spark`, and runs `range` / `spark.sql`
+  / `groupBy` through the kernel SAB bridge - the integration the standalone
+  harness cannot exercise.
+
+### Changed
+- **JupyterLite bumped to core 0.7.6 / pyodide-kernel 0.7.2** (module-worker
+  kernel; the 0.6.1 classic worker was incompatible with recent Pyodide, so the
+  lite kernel never booted). Pyodide is vendored same-origin at the exact version
+  the kernel expects (0.29.3), shared by the kernel and the harness;
+  `exposeAppInBrowser` lets the kernel bootstrap reach the app.
+- Browser deliverable confirmed working end-to-end on both paths (harness +
+  kernel), 9 e2e checks green with no flakes.
 
 ## [0.1.0] - 2026-06-12
 
@@ -130,5 +143,6 @@ unchanged - no reimplementation, no local JVM, no Python backend.
 - `AddArtifacts` is lowered to a single grpc-web `unary()` POST (grpc-web has no
   true client streaming); not exercised end-to-end yet.
 
-[Unreleased]: https://github.com/HyukjinKwon/pyspark-connect-web/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/HyukjinKwon/pyspark-connect-web/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/HyukjinKwon/pyspark-connect-web/releases/tag/v0.2.0
 [0.1.0]: https://github.com/HyukjinKwon/pyspark-connect-web/releases/tag/v0.1.0

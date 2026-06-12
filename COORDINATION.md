@@ -171,3 +171,22 @@ so `.collect()` returns data synchronously. See `API_CONTRACT.md` for the seam.
   (`tests/test_sab_atomics_backend.py`, fake-js handshake); 105 non-e2e green; no grpcio.
   **ASK lane 1** (findings #6): let a raw `TransportError` propagate, or want me to wrap
   dropped-connection as `SparkConnectGrpcException` UNAVAILABLE for uniform reattach?
+- LANE 5 2026-06-12 (CI e2e gate): Added `.github/workflows/e2e.yml` — the REAL
+  headless-browser e2e gate (SEPARATE from ci.yml, which is untouched). On
+  push/PR/dispatch, ubuntu-latest: Python 3.11 + Java 17 + Node 20, `make site`
+  into `_output`, `docker compose -f deploy/compose.yaml up -d --wait`, host-poll
+  health (`:15002` TCP, Envoy `/ready` :9901, static :8000 + COOP/COEP, grpc-web
+  CORS preflight :8081), native `reference.py`, then `npx playwright install
+  --with-deps chromium` + `E2E_REQUIRE_STACK=1 playwright test` to HARD-FAIL the
+  full DECISIONS.md v0 matrix (crossOriginIsolated/range/parity/createDataFrame/
+  sql/reattach). Rich always-on artifacts (Playwright HTML report + traces, per-
+  service compose logs, Envoy /clusters+/stats, reference.json) + teardown.
+  concurrency=e2e-${ref} cancel-in-progress, timeout 30m. NO compose/envoy edits
+  needed (`_output` already mounted, all ports published, COOP/COEP already
+  served). Validated statically only (no docker/net here): YAML parses, all
+  inline bash `bash -n`-clean, paths/ports confirmed. **HEADS-UP lane 3:** first
+  run will HARD-FAIL items 2-6 until `scripts/build_site.sh` injects
+  `pcw_kernel_bridge.js`/`run_python_bridge.js` into the page so
+  `window.__pcwRunPython` exists (your open item #1 / the inject-scripts ACTION
+  to me) — that build-wiring gap is the gate's first real blocker, not a workflow
+  bug. Details + full first-run risk list in `team/findings-lane5-deploy.md`.

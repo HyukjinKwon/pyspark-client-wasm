@@ -75,7 +75,46 @@ The e2e harness needs lane 3 to: (a) build the JupyterLite site into ./_output (
 * `grpcio-guard`: unchanged, package-scoped (DECISIONS.md #1).
 * `headers-guard`: now runs `scripts/validate_deploy.py` instead of grep.
 * `build-wheel`: builds the wheel, installs+imports it, asserts no `grpcio` in its declared requirements, uploads it as an artifact.
-* e2e job: still a commented sketch (no browser stack in CI); updated to call `scripts/build_site.sh` + E2E_REQUIRE_STACK=1 once the stack lands.
+* e2e job in ci.yml: intentionally still a commented sketch — the REAL e2e gate now lives in its own workflow, `.github/workflows/e2e.yml` (below). ci.yml stays the cheap always-on gate (unit/lint/grpcio/headers/wheel); e2e.yml is the heavy docker+browser gate.
+
+---
+
+# Real browser e2e CI (2026-06-12) — `.github/workflows/e2e.yml`
+
+## What it is
+A SEPARATE workflow (does NOT touch ci.yml) that runs the full DECISIONS.md "v0 done =" checklist in a real headless Chromium against the real stack, on every push to main / PR / manual dispatch. ubuntu-latest, `timeout-minutes: 30`, `concurrency: e2e-${{ github.ref }}` with cancel-in-progress.
+
+## Stage sequence
+0. Toolchain: checkout, Python 3.11 (`setup-python@v5`), Java 17 Temurin (`setup-java@v4`), Node 20 (`setup-node@v4`); print tool/docker versions.
+1. Build: `pip install build==1.2.2 jupyterlite-core==0.6.4 jupyterlite-pyodide-kernel==0.6.1` (pins kept in lockstep with `scripts/build_site.sh`) + `pip install -e ".[dev]"` (for the native reference client). `make site` -> wheel + JupyterLite site into `_output`. Then a verify step asserts `_output/_headers` carries COOP + COEP and a `pyspark_connect_web-*.whl` is present (index.html presence is a warning, not a hard fail, since jupyter lite may emit it under a subpath).
+2. Stack: `docker compose -f deploy/compose.yaml up -d --wait` (Spark Connect's TCP healthcheck + envoy `depends_on service_healthy` make `--wait` block on Spark). Then HOST-SIDE polling (static + envoy are scratch images with no shell/curl, so they can't carry CMD healthchecks): TCP `:15002`, Envoy admin `http://localhost:9901/ready`, static page `http://localhost:8000/`, a `curl -sI` check that COOP/COEP survive the proxy on `:8000`, and a grpc-web CORS preflight `OPTIONS` against `:8081`. On any failure: dump `compose ps` + `compose logs` and exit non-zero.
+3. Reference: `python tests/e2e/reference.py --remote sc://localhost:15002 --out <abs>/tests/e2e/reference.json` (native PySpark Connect client, plain gRPC; grpcio allowed — file is under tests/, DECISIONS.md #1 scopes the ban to the package). Cats the JSON into the log.
+4. Browser: `npm install` + `npx playwright install --with-deps chromium`, then `E2E_REQUIRE_STACK=1 ... npx playwright test --reporter=github,html` from `tests/e2e`.
+5. Always: write `artifacts-e2e/` (compose ps, combined + per-service logs with timestamps, Envoy `/clusters` + `/stats`), upload three artifacts (`playwright-report`, `playwright-test-results`, `stack-debug` incl. reference.json), then `docker compose down -v`.
+
+## v0 matrix items enforced (E2E_REQUIRE_STACK=1 -> HARD-FAIL, not skip)
+All six, via `tests/e2e/v0-checklist.spec.ts`:
+1. `crossOriginIsolated === true` (DECISIONS.md #4) — server-header only.
+2. `spark.range(10).collect()` == 10 rows.
+3. filter/select/groupBy/agg `toPandas()` == native reference (DECISIONS.md #7).
+4. `createDataFrame(pandas_df)` round-trips.
+5. `spark.sql("select 1 as x").collect()`.
+6. mid-stream disconnect recovers via ReattachExecute (DECISIONS.md #6).
+
+## compose/envoy edits
+NONE were needed. `deploy/compose.yaml` already mounts `../_output:/web:ro`, publishes 8000/8081/9901/15002 to the host, and gives spark-connect a TCP healthcheck that gates envoy. `deploy/envoy.yaml` already serves COOP/COEP on :8000 and the grpc-web filter + permissive CORS on :8081. The workflow polls Envoy admin `/ready` (built-in) and the static page instead of adding a synthetic health endpoint — chosen because the static/envoy images are scratch-based (no shell for a CMD healthcheck).
+
+## Failure-debugging affordances
+`set -euxo pipefail` in every block (commands echoed); `::error::`/`::warning::` annotations on each gate; combined + per-service `docker compose logs --timestamps`; Envoy `/clusters` + `/stats` snapshots; Playwright `trace: retain-on-failure` + `screenshot: only-on-failure` (already in playwright.config.ts) uploaded via `test-results`; HTML report uploaded; reference.json uploaded so a #3 parity mismatch can be diffed. All upload/teardown steps are `if: always()`.
+
+## What is LIKELY TO BREAK on the first real GitHub run (candid)
+1. **`window.__pcwRunPython` not on the page -> items 2-6 HARD-FAIL.** `scripts/build_site.sh` builds the JupyterLite site but does NOT inject `pcw_kernel_bridge.js` / `run_python_bridge.js` (nor `coi-serviceworker.js`) into the app `index.html` before the bundle. That injection is the OPEN action item to lane 5 from lane 3 (COORDINATION 2026-06-12) and findings-lane3 #1. Until build_site.sh emits an `index.template.html` (or uses `--apps`/`jupyter_lite_config.json`) that loads `pcw_kernel_bridge.js` first, `bridgeAvailable()` is false and, under E2E_REQUIRE_STACK=1, `gateBridge` throws. Item 1 (crossOriginIsolated) should still pass since COOP/COEP come from Envoy directly. THIS IS THE MOST LIKELY FIRST FAILURE — it is a build-wiring gap, not a workflow bug.
+2. **Spark Connect `--packages` Ivy download.** First boot resolves `org.apache.spark:spark-connect_2.13:4.0.0` over the network (~1 min). GH runners have network so it should resolve, but a slow/transient Maven Central can blow the healthcheck's 60s start_period + 12 retries -> `up --wait` fails. Re-run usually fixes; pre-baking the jar would harden it.
+3. **COEP + CDN Pyodide/wheels.** `require-corp` blocks any cross-origin subresource lacking CORP. `jupyter-lite.json` pulls Pyodide 0.28 from jsDelivr (sends permissive CORS, OK) and packages pyarrow/pandas/numpy from the Pyodide dist; if any wheel CDN omits CORP under COEP the in-browser import fails and items 2-6 fail at kernel boot. Vendoring wheels behind the isolated origin is the fix.
+4. **Pyodide cold start vs timeouts.** First Pyodide boot + `pyspark` import in WASM is slow; `E2E_KERNEL_TIMEOUT_MS=150000` and the 180s per-test timeout are tuned for it but a cold cache could still exceed them.
+5. **pyspark version skew.** `make site`/`reference.py` install `pyspark>=4.0,<4.2` from PyPI on the runner; the BROWSER uses whatever the micropip'd wheel + Pyodide resolve. Item 3 parity assumes both ends are the same Spark 4.0.0 semantics — a drift would surface as a parity diff (debuggable from the uploaded reference.json).
+6. **Static host serves `_output` verbatim.** If `jupyter lite build` emits the app under a subpath rather than at `/`, `http://localhost:8000/` may not be the JupyterLite root and `page.goto(BASE_URL)` lands on a dir listing/404. The verify step warns (not fails) on a missing root index.html so this is visible in logs.
+7. **Could not be run here.** No docker/network in the maintainer sandbox, so this workflow was validated STATICALLY only: YAML parses, all 11 inline bash blocks pass `bash -n`, every referenced path/port/file confirmed present, Playwright report/`test-results` dirs match the artifact upload paths. It has NEVER executed end-to-end — first green is expected only after the lane-3 bridge-injection gap (#1) is closed in build_site.sh.
 
 ## Heads-up for other lanes
 

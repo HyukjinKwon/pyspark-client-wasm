@@ -1,0 +1,301 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# e2e.yml — the REAL headless-browser end-to-end gate for pyspark-connect-web.
+#
+# This is the one thing that cannot be verified in the maintainer's local sandbox
+# (no network, no docker there). GitHub-hosted ubuntu-latest runners have both, so
+# this workflow exercises the entire browser layer that unit/lint CI cannot:
+#
+#   * SAB/Atomics blocking bridge  (needs crossOriginIsolated === true)
+#   * JupyterLite Pyodide kernel   (real Pyodide >=0.28 / Python 3.13 in Chromium)
+#   * real Envoy grpc-web proxy    (grpc-web <-> gRPC translation, long streams)
+#   * real Spark 4.0.0 Connect server (ExecutePlan/ReattachExecute/ReleaseExecute)
+#   * real Chromium                (Playwright)
+#
+# It asserts the DECISIONS.md "v0 done =" matrix in a real browser, with
+# E2E_REQUIRE_STACK=1 so the checklist items HARD-FAIL (not skip) in CI:
+#   1. crossOriginIsolated === true                              (DECISIONS.md #4)
+#   2. spark.range(10).collect() == 10 rows
+#   3. filter/select/groupBy/agg toPandas == native reference    (DECISIONS.md #7)
+#   4. createDataFrame(pandas_df) round-trips
+#   5. spark.sql("select 1 as x").collect() works
+#   6. mid-stream disconnect recovers via ReattachExecute        (DECISIONS.md #6)
+#
+# This is a SEPARATE workflow from ci.yml (unit/lint/grpcio-guard/headers/wheel);
+# ci.yml stays the cheap, always-on gate. This one is heavier (docker + browser)
+# and is expected to be flaky on its FIRST real runs — see the candid notes at the
+# bottom of team/findings-lane5-deploy.md.
+
+name: e2e
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Allow manual runs while the browser layer is being stabilised.
+  workflow_dispatch:
+
+# One in-flight e2e run per ref; a newer push cancels the older run (saves runner
+# minutes — this job is expensive). Does NOT touch ci.yml's concurrency.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: headless-browser e2e (DECISIONS.md "v0 done =")
+    runs-on: ubuntu-latest
+    # Cold Spark Connect boot (Ivy --packages download ~1 min) + Pyodide cold
+    # start + chromium download all add up; give it room but cap it so a hung
+    # stream cannot burn an hour.
+    timeout-minutes: 30
+
+    env:
+      PCW_OUTPUT_DIR: _output
+      E2E_BASE_URL: http://localhost:8000
+      E2E_SPARK_REMOTE: sc://localhost:8081/;transport=grpcweb
+      # Native reference client talks plain gRPC straight to Spark Connect.
+      E2E_REFERENCE_REMOTE: sc://localhost:15002
+      E2E_REFERENCE: ${{ github.workspace }}/tests/e2e/reference.json
+      # HARD-FAIL the checklist instead of skipping — this is the whole point.
+      E2E_REQUIRE_STACK: "1"
+
+    steps:
+      # -------------------------------------------------------------------
+      # 0. toolchain
+      # -------------------------------------------------------------------
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Tool versions (debug)
+        run: |
+          set -euxo pipefail
+          python --version
+          java -version
+          node --version
+          docker --version
+          docker compose version
+
+      # -------------------------------------------------------------------
+      # 1. build the wheel + JupyterLite site into _output
+      #    (reuses scripts/build_site.sh — same path a maintainer runs locally)
+      # -------------------------------------------------------------------
+      - name: Install build tooling (pinned)
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          # Pins MUST match scripts/build_site.sh (kept in lockstep here so the
+          # build step does not silently fall back to whatever pip resolves).
+          python -m pip install \
+            "build==1.2.2" \
+            "jupyterlite-core==0.6.4" \
+            "jupyterlite-pyodide-kernel==0.6.1"
+          # Reference generator (tests/e2e/reference.py) uses the NATIVE PySpark
+          # Connect client (grpcio is fine here — it lives under tests/, outside
+          # the package; DECISIONS.md #1 only forbids grpcio inside the package).
+          python -m pip install -e ".[dev]"
+
+      - name: Build wheel + JupyterLite site (make site)
+        run: make site
+
+      - name: Verify _output contains the COOP/COEP _headers and the wheel
+        run: |
+          set -euxo pipefail
+          test -d "${PCW_OUTPUT_DIR}" || { echo "::error::${PCW_OUTPUT_DIR} not built"; exit 1; }
+          ls -la "${PCW_OUTPUT_DIR}"
+          # COOP/COEP _headers (DECISIONS.md #4) — without these the browser is
+          # not cross-origin isolated and SharedArrayBuffer is unavailable.
+          test -f "${PCW_OUTPUT_DIR}/_headers" || { echo "::error::_headers missing from ${PCW_OUTPUT_DIR}"; exit 1; }
+          grep -q 'Cross-Origin-Opener-Policy: same-origin' "${PCW_OUTPUT_DIR}/_headers" \
+            || { echo "::error::COOP missing from ${PCW_OUTPUT_DIR}/_headers"; exit 1; }
+          grep -q 'Cross-Origin-Embedder-Policy: require-corp' "${PCW_OUTPUT_DIR}/_headers" \
+            || { echo "::error::COEP missing from ${PCW_OUTPUT_DIR}/_headers"; exit 1; }
+          # The wheel micropip installs in the browser.
+          ls "${PCW_OUTPUT_DIR}"/pyspark_connect_web-*.whl >/dev/null 2>&1 \
+            || { echo "::error::wheel not copied into ${PCW_OUTPUT_DIR}"; exit 1; }
+          # The JupyterLite app itself must have built (index.html at the root).
+          test -f "${PCW_OUTPUT_DIR}/index.html" \
+            || echo "::warning::no index.html at ${PCW_OUTPUT_DIR} root; jupyter lite may emit it under a subpath — the static host serves the dir verbatim"
+
+      # -------------------------------------------------------------------
+      # 2. bring up the real stack (Spark Connect + Envoy grpc-web + static)
+      # -------------------------------------------------------------------
+      - name: docker compose up (real stack)
+        run: |
+          set -euxo pipefail
+          # spark-connect has a TCP healthcheck and envoy depends_on it
+          # (service_healthy), so --wait blocks until Spark Connect is up.
+          # static + envoy use scratch images (no shell/curl) so they cannot
+          # carry a CMD healthcheck; we host-poll them in the next step.
+          docker compose -f deploy/compose.yaml up -d --wait || {
+            echo "::error::docker compose up --wait failed (Spark Connect never became healthy)";
+            docker compose -f deploy/compose.yaml ps || true;
+            docker compose -f deploy/compose.yaml logs --no-color || true;
+            exit 1;
+          }
+          docker compose -f deploy/compose.yaml ps
+
+      - name: Wait for stack health (static page + Envoy admin + Connect gRPC)
+        run: |
+          set -uo pipefail
+          fail() {
+            echo "::error::$1"
+            echo "===== docker compose ps ====="
+            docker compose -f deploy/compose.yaml ps || true
+            echo "===== docker compose logs ====="
+            docker compose -f deploy/compose.yaml logs --no-color || true
+            exit 1
+          }
+
+          # 2a. Spark Connect raw gRPC port (native reference + Envoy upstream).
+          echo "waiting for Spark Connect gRPC on :15002 ..."
+          for i in $(seq 1 60); do
+            if (exec 3<>/dev/tcp/127.0.0.1/15002) 2>/dev/null; then
+              echo "  Spark Connect :15002 accepting TCP (after ${i}s)"; break
+            fi
+            [ "$i" -eq 60 ] && fail "Spark Connect :15002 never opened"
+            sleep 1
+          done
+
+          # 2b. Envoy admin /ready — 200 only when Envoy's listeners are warmed
+          # and the spark-connect cluster is reachable.
+          echo "waiting for Envoy admin /ready on :9901 ..."
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null "http://localhost:9901/ready"; then
+              echo "  Envoy /ready (after ${i}s)"; break
+            fi
+            [ "$i" -eq 60 ] && fail "Envoy admin /ready never returned 200"
+            sleep 1
+          done
+
+          # 2c. Static JupyterLite page through Envoy :8000 (the page the browser
+          # loads) AND that the COOP/COEP headers survive the proxy.
+          echo "waiting for JupyterLite static page on :8000 ..."
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null "http://localhost:8000/"; then
+              echo "  static page :8000 serving (after ${i}s)"; break
+            fi
+            [ "$i" -eq 60 ] && fail "JupyterLite static page :8000 never served 2xx"
+            sleep 1
+          done
+          echo "===== COOP/COEP headers on :8000 (must be present for SAB) ====="
+          curl -sI "http://localhost:8000/" | grep -i 'cross-origin' || \
+            fail "COOP/COEP headers absent on :8000 — crossOriginIsolated would be false"
+
+          # 2d. Envoy answers the grpc-web CORS preflight on :8081 (the endpoint
+          # the in-browser client posts ExecutePlan to).
+          echo "checking grpc-web CORS preflight on :8081 ..."
+          curl -fsS -o /dev/null -X OPTIONS \
+            "http://localhost:8081/spark.connect.SparkConnectService/ExecutePlan" \
+            -H "Origin: http://localhost:8000" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: x-grpc-web,content-type" \
+            || fail "Envoy did not answer the grpc-web CORS preflight on :8081"
+          echo "stack healthy."
+
+      # -------------------------------------------------------------------
+      # 3. ground-truth reference from the NATIVE Spark Connect client
+      # -------------------------------------------------------------------
+      - name: Generate native reference (tests/e2e/reference.py)
+        run: |
+          set -euxo pipefail
+          python tests/e2e/reference.py \
+            --remote "${E2E_REFERENCE_REMOTE}" \
+            --out "${E2E_REFERENCE}"
+          echo "===== reference.json ====="
+          cat "${E2E_REFERENCE}"
+
+      # -------------------------------------------------------------------
+      # 4. install Playwright + chromium and run the e2e (HARD-FAIL mode)
+      # -------------------------------------------------------------------
+      - name: Install Playwright deps + chromium
+        working-directory: tests/e2e
+        run: |
+          set -euxo pipefail
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Run e2e (E2E_REQUIRE_STACK=1 — enforce the v0 matrix)
+        working-directory: tests/e2e
+        env:
+          CI: "true"
+        run: |
+          set -euxo pipefail
+          # Emit BOTH the GitHub annotations reporter (inline failures) and the
+          # HTML report (uploaded as an artifact for offline debugging). The
+          # config's default reporter is "github" under CI; override on the CLI
+          # so we also get the HTML report dir.
+          npx playwright test --reporter=github,html
+
+      # -------------------------------------------------------------------
+      # 5. ALWAYS: collect rich debug artifacts, then tear down
+      # -------------------------------------------------------------------
+      - name: Dump docker compose logs
+        if: always()
+        run: |
+          mkdir -p "${{ github.workspace }}/artifacts-e2e"
+          docker compose -f deploy/compose.yaml ps \
+            > "${{ github.workspace }}/artifacts-e2e/compose-ps.txt" 2>&1 || true
+          docker compose -f deploy/compose.yaml logs --no-color --timestamps \
+            > "${{ github.workspace }}/artifacts-e2e/compose-logs.txt" 2>&1 || true
+          # Per-service logs split out for easier reading.
+          for svc in spark-connect envoy static; do
+            docker compose -f deploy/compose.yaml logs --no-color --timestamps "$svc" \
+              > "${{ github.workspace }}/artifacts-e2e/${svc}.log" 2>&1 || true
+          done
+          # Envoy stats/clusters snapshot (why a route/cluster was unhealthy).
+          curl -fsS "http://localhost:9901/clusters" \
+            > "${{ github.workspace }}/artifacts-e2e/envoy-clusters.txt" 2>&1 || true
+          curl -fsS "http://localhost:9901/stats" \
+            > "${{ github.workspace }}/artifacts-e2e/envoy-stats.txt" 2>&1 || true
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Playwright traces/screenshots (test-results)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: tests/e2e/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload docker compose logs + Envoy snapshots + reference.json
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-debug
+          path: |
+            artifacts-e2e/**
+            tests/e2e/reference.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: docker compose down
+        if: always()
+        run: docker compose -f deploy/compose.yaml down -v || true

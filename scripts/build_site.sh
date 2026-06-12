@@ -63,6 +63,48 @@ log "copying _headers + wheel into $OUTPUT_DIR"
 cp "$LITE_DIR/_headers" "$OUTPUT_DIR/_headers"
 cp "$WHEEL" "$OUTPUT_DIR/"
 
+# --- 3b. wire lane 3's bridge JS into the site -----------------------------
+# Two of the three scripts SELF-INSTALL on load and must run BEFORE the
+# JupyterLite app reads `Worker` off the global scope:
+#   - coi-serviceworker.js  : registers a SW that injects COOP/COEP (header-less
+#                             hosts like GitHub Pages); harmless when Envoy/_headers
+#                             already set them. Served at site root for SW scope.
+#   - pcw_kernel_bridge.js  : wraps globalThis.Worker so every kernel worker gets
+#                             the SAB Bridge. It `import`s "../worker/bridge.js",
+#                             so the jupyterlite/ <-> worker/ relative layout MUST
+#                             be preserved in the output (hence the two dirs below
+#                             + the /jupyterlite/... site-root-absolute src).
+# run_python_bridge.js is copied for the e2e hook but is NOT auto-wired inside
+# JupyterLite (Shape B needs a live kernel connection — the remaining browser
+# integration item; see jupyterlite/README.md + team/findings-lane3-bridge.md).
+log "copying bridge JS assets into $OUTPUT_DIR (preserving module layout)"
+mkdir -p "$OUTPUT_DIR/jupyterlite" "$OUTPUT_DIR/worker"
+cp "$LITE_DIR"/pcw_kernel_bridge.js "$LITE_DIR"/run_python_bridge.js "$OUTPUT_DIR/jupyterlite/"
+cp "$LITE_DIR"/coi-serviceworker.js "$OUTPUT_DIR/coi-serviceworker.js"
+cp pyspark_connect_web/worker/*.js "$OUTPUT_DIR/worker/"
+
+log "injecting self-installing bridge <script> tags into emitted HTML"
+PCW_OUTPUT_DIR="$OUTPUT_DIR" python3 - <<'PY'
+import os, pathlib
+out = pathlib.Path(os.environ["PCW_OUTPUT_DIR"])
+MARK = "pcw bridge (injected by build_site.sh)"
+TAGS = (
+    f"\n<!-- {MARK} -->"
+    '\n<script src="/coi-serviceworker.js"></script>'
+    '\n<script type="module" src="/jupyterlite/pcw_kernel_bridge.js"></script>\n'
+)
+n = 0
+for html in out.rglob("*.html"):
+    text = html.read_text(encoding="utf-8")
+    if MARK in text or "</head>" not in text:
+        continue
+    html.write_text(text.replace("</head>", TAGS + "</head>", 1), encoding="utf-8")
+    n += 1
+print(f"[build_site] injected bridge scripts into {n} html file(s)")
+if n == 0:
+    raise SystemExit("[build_site] ERROR: no HTML files got the bridge injection")
+PY
+
 # --- 4. sanity checks (these must hold for the bridge to work) -------------
 grep -q 'Cross-Origin-Opener-Policy: same-origin' "$OUTPUT_DIR/_headers" \
   || die "COOP missing from $OUTPUT_DIR/_headers (DECISIONS.md #4)"
@@ -70,6 +112,9 @@ grep -q 'Cross-Origin-Embedder-Policy: require-corp' "$OUTPUT_DIR/_headers" \
   || die "COEP missing from $OUTPUT_DIR/_headers (DECISIONS.md #4)"
 ls "$OUTPUT_DIR"/pyspark_connect_web-*.whl >/dev/null 2>&1 \
   || die "wheel not copied into $OUTPUT_DIR"
+[ -f "$OUTPUT_DIR/coi-serviceworker.js" ] && [ -f "$OUTPUT_DIR/jupyterlite/pcw_kernel_bridge.js" ] \
+  && [ -f "$OUTPUT_DIR/worker/bridge.js" ] \
+  || die "bridge JS assets missing from $OUTPUT_DIR (pcw_kernel_bridge import would 404)"
 
 log "done. Serve $OUTPUT_DIR with a host that emits COOP/COEP (deploy/ Envoy does)."
 log "  dev:  docker compose -f deploy/compose.yaml up   # serves _output on :8000"

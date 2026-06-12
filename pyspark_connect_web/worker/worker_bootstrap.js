@@ -33,7 +33,10 @@ const MICROPIP_PKGS = [
   "protobuf>=7",
   // pure-Python, required by pyspark.sql.connect (google.rpc.*); NOT in Pyodide.
   "googleapis-common-protos>=1.56.4",
-  "pyspark>=4.0,<4.2",
+  // Pin to match the Spark Connect server version (deploy/ uses
+  // apache/spark:4.0.0). A newer client reads configs a 4.0.0 server lacks
+  // (e.g. SPARK-53525's localRelationChunkSizeRows) -> SQL_CONF_NOT_FOUND.
+  "pyspark==4.0.0",
   // The wheel is served alongside the page; URL injected by the host config.
   self.PCW_WHEEL_URL || "pyspark_connect_web-0.0.1.dev0-py3-none-any.whl",
 ];

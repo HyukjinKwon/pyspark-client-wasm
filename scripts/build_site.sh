@@ -96,6 +96,9 @@ cp "$LITE_DIR"/pcw_kernel_bridge.js "$LITE_DIR"/run_python_bridge.js \
    "$LITE_DIR"/pcw_runpython_bootstrap.js "$OUTPUT_DIR/jupyterlite/"
 cp "$LITE_DIR"/coi-serviceworker.js "$OUTPUT_DIR/coi-serviceworker.js"
 cp pyspark_connect_web/worker/*.js "$OUTPUT_DIR/worker/"
+# Standalone e2e harness page (boots the worker + binds `spark` + exposes
+# window.__pcwRunPython without JupyterLite); served at the site root.
+cp "$LITE_DIR"/harness.html "$OUTPUT_DIR/harness.html"
 
 log "injecting self-installing bridge <script> tags into emitted HTML"
 PCW_OUTPUT_DIR="$OUTPUT_DIR" python3 - <<'PY'
@@ -131,7 +134,9 @@ ls "$OUTPUT_DIR"/pyspark_connect_web-*.whl >/dev/null 2>&1 \
   && [ -f "$OUTPUT_DIR/jupyterlite/pcw_runpython_bootstrap.js" ] \
   && [ -f "$OUTPUT_DIR/jupyterlite/run_python_bridge.js" ] \
   && [ -f "$OUTPUT_DIR/worker/bridge.js" ] \
-  || die "bridge JS assets missing from $OUTPUT_DIR (pcw_kernel_bridge import would 404)"
+  && [ -f "$OUTPUT_DIR/worker/worker_bootstrap.js" ] \
+  && [ -f "$OUTPUT_DIR/harness.html" ] \
+  || die "bridge JS assets / harness.html missing from $OUTPUT_DIR"
 
 log "done. Serve $OUTPUT_DIR with a host that emits COOP/COEP (deploy/ Envoy does)."
 log "  dev:  docker compose -f deploy/compose.yaml up   # serves _output on :8000"

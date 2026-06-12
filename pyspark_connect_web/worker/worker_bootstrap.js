@@ -37,8 +37,14 @@ const MICROPIP_PKGS = [
   // apache/spark:4.0.0). A newer client reads configs a 4.0.0 server lacks
   // (e.g. SPARK-53525's localRelationChunkSizeRows) -> SQL_CONF_NOT_FOUND.
   "pyspark==4.0.0",
-  // The wheel is served alongside the page; URL injected by the host config.
-  self.PCW_WHEEL_URL || "pyspark_connect_web-0.0.1.dev0-py3-none-any.whl",
+  // The wheel is served at the site root. micropip needs a resolvable URL (a
+  // bare filename would be treated as a PyPI package name), so default to an
+  // origin-absolute URL. Overridable via self.PCW_WHEEL_URL.
+  self.PCW_WHEEL_URL ||
+    new URL(
+      "/pyspark_connect_web-0.0.1.dev0-py3-none-any.whl",
+      self.location.origin,
+    ).href,
 ];
 
 function assertIsolated() {

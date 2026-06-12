@@ -55,7 +55,10 @@ jobs:
 
     env:
       PCW_OUTPUT_DIR: _output
-      E2E_BASE_URL: http://localhost:8000
+      # The standalone harness page boots the worker + binds `spark` + exposes
+      # window.__pcwRunPython (no JupyterLite app/kernel needed). Served at the
+      # site root by build_site.sh.
+      E2E_BASE_URL: http://localhost:8000/harness.html
       E2E_SPARK_REMOTE: sc://localhost:8081/;transport=grpcweb
       # Native reference client talks plain gRPC straight to Spark Connect.
       E2E_REFERENCE_REMOTE: sc://localhost:15002

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  harness.html - a minimal standalone page that boots the pyspark-connect-web
+  browser stack WITHOUT JupyterLite, for the headless e2e (tests/e2e):
+
+    Pyodide (Web Worker) + micropip(pyspark==4.0.0 + the wheel)
+      -> pcw.install()
+      -> SparkSession.builder.remote("sc://.../;transport=grpcweb")
+      -> SAB/Atomics blocking bridge (bridge.js on this main thread does the
+         real cross-origin fetch to Envoy's grpc-web endpoint)
+
+  It then exposes window.__pcwRunPython(src) (run_python_bridge.js Shape A) with
+  `spark` already bound in the kernel namespace, which is exactly what the e2e
+  helpers drive. The page MUST be served cross-origin isolated (Envoy sets
+  COOP/COEP on :8000) or SharedArrayBuffer is unavailable.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>pyspark-connect-web e2e harness</title>
+    <script type="module">
+      import { installBridge } from "/worker/bridge.js";
+      import { installRunPython } from "/jupyterlite/run_python_bridge.js";
+
+      const SPARK_REMOTE =
+        new URLSearchParams(location.search).get("remote") ||
+        "sc://localhost:8081/;transport=grpcweb";
+
+      const status = (s) => {
+        const el = document.getElementById("status");
+        if (el) el.textContent = s;
+        // eslint-disable-next-line no-console
+        console.log("[pcw harness]", s);
+      };
+
+      // Run one snippet in the worker and await its result (used for the
+      // one-time bootstrap, before window.__pcwRunPython is exposed).
+      function runOnce(worker, code) {
+        return new Promise((resolve, reject) => {
+          const id = "pcw-boot-" + Math.random().toString(36).slice(2);
+          const onMsg = (ev) => {
+            const m = ev.data || {};
+            if (m.id !== id) return;
+            if (m.type === "pcw_result") {
+              worker.removeEventListener("message", onMsg);
+              resolve(m.result);
+            } else if (m.type === "pcw_run_error") {
+              worker.removeEventListener("message", onMsg);
+              reject(new Error(m.message));
+            }
+          };
+          worker.addEventListener("message", onMsg);
+          worker.postMessage({ type: "pcw_run", id, code });
+        });
+      }
+
+      async function main() {
+        if (self.crossOriginIsolated !== true) {
+          status("NOT cross-origin isolated (need COOP/COEP)");
+          window.__pcwError = "not cross-origin isolated";
+          return;
+        }
+        status("starting worker + Pyodide ...");
+        // CLASSIC worker: worker_bootstrap.js uses importScripts() to load
+        // Pyodide, which does not exist in a module worker.
+        const worker = new Worker("/worker/worker_bootstrap.js");
+        installBridge(worker); // attaches the SAB on pcw_sab, drives pcw_rpc
+
+        const ready = new Promise((resolve, reject) => {
+          worker.addEventListener("message", (ev) => {
+            const m = ev.data || {};
+            if (m.type === "pcw_ready") resolve();
+            else if (m.type === "pcw_error") reject(new Error(m.message));
+          });
+        });
+        worker.postMessage({ type: "pcw_boot" });
+        await ready;
+
+        status("binding SparkSession (" + SPARK_REMOTE + ") ...");
+        await runOnce(
+          worker,
+          [
+            "import pyspark_connect_web as pcw",
+            "pcw.install()",
+            "from pyspark.sql import SparkSession",
+            "spark = SparkSession.builder.remote(" +
+              JSON.stringify(SPARK_REMOTE) +
+              ").getOrCreate()",
+            "None",
+          ].join("\n"),
+        );
+
+        // Expose the e2e hook now that `spark` is bound and the kernel is ready.
+        installRunPython(worker);
+        window.__pcwReady = true;
+        status("ready: window.__pcwRunPython is live, spark is bound");
+      }
+
+      main().catch((e) => {
+        window.__pcwError = String((e && e.message) || e);
+        status("FAILED: " + window.__pcwError);
+        // eslint-disable-next-line no-console
+        console.error("[pcw harness] failed:", e);
+      });
+    </script>
+  </head>
+  <body>
+    <h1>pyspark-connect-web e2e harness</h1>
+    <p id="status">booting...</p>
+  </body>
+</html>

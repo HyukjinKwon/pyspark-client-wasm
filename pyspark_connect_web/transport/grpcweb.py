@@ -374,26 +374,36 @@ class GrpcWebStub:
         saw_trailer = False
         trailers: Optional[Dict[str, str]] = None
 
-        for chunk in chunk_iter:
-            if not chunk:
-                continue
-            buffer.extend(chunk)
-            # Drain every *complete* frame currently buffered. ``_take_frame``
-            # mutates ``buffer`` in place (deletes the consumed prefix), so we
-            # re-check from the front each iteration - no stale offset bug.
-            while True:
-                frame = _take_frame(buffer)
-                if frame is None:
-                    break  # only a partial frame remains; wait for more bytes
-                if frame.is_compressed:
-                    raise SparkConnectGrpcException(
-                        f"grpc-web: compressed frame not supported (path={path})"
-                    )
-                if frame.is_trailer:
-                    saw_trailer = True
-                    trailers = parse_trailers(frame.payload)
-                else:
-                    yield response_cls.FromString(frame.payload)
+        try:
+            for chunk in chunk_iter:
+                if not chunk:
+                    continue
+                buffer.extend(chunk)
+                # Drain every *complete* frame currently buffered. ``_take_frame``
+                # mutates ``buffer`` in place (deletes the consumed prefix), so we
+                # re-check from the front each iteration - no stale offset bug.
+                while True:
+                    frame = _take_frame(buffer)
+                    if frame is None:
+                        break  # only a partial frame remains; wait for more bytes
+                    if frame.is_compressed:
+                        raise SparkConnectGrpcException(
+                            f"grpc-web: compressed frame not supported (path={path})"
+                        )
+                    if frame.is_trailer:
+                        saw_trailer = True
+                        trailers = parse_trailers(frame.payload)
+                    else:
+                        yield response_cls.FromString(frame.payload)
+        except SparkConnectGrpcException:
+            raise  # a real server error (bad trailer / compressed frame): surface it
+        except Exception:
+            # The transport itself failed mid-stream (e.g. an aborted/dropped
+            # fetch raises TransportError from the channel). Treat it exactly like
+            # a trailer-less drop: end cleanly so the reattachable iterator
+            # recovers via ReattachExecute. A persistent failure simply recurs and
+            # the reattach retry budget eventually surfaces it (it will not hang).
+            return
 
         if not saw_trailer:
             # Broken stream (no terminating trailer; a trailing partial frame in

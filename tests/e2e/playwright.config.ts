@@ -21,6 +21,10 @@ export default defineConfig({
   timeout: 150_000,
   expect: { timeout: 30_000 },
   fullyParallel: false,
+  // One worker: the harness spec and the kernel spec each boot a heavy Pyodide
+  // stack; running spec files concurrently would contend for the runner (and
+  // risk OOM). Force fully-serial execution across files.
+  workers: 1,
   // No retries: the gate must be honest. The intermittent spark.sql hang was a
   // real SAB-bridge deadlock (a back-to-back RPC whose S_REQ_READY raced the
   // abandoned stream's S_IDLE), now fixed at the source in bridge.js /

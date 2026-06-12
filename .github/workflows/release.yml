@@ -7,11 +7,10 @@
 # package -> publish to the language registry -> cut a GitHub Release with
 # notes from CHANGELOG.md, attaching the built site as an asset.
 #
-# For Python that registry is PyPI, and we publish via OIDC *trusted
-# publishing* (no long-lived API token in repo secrets): the `pypi`
-# environment is registered as a trusted publisher on PyPI, and
-# `permissions: id-token: write` lets pypa/gh-action-pypi-publish mint a
-# short-lived token at publish time. See the runbook in CHANGELOG.md.
+# For Python that registry is PyPI, and we publish with an API token stored as
+# the repo secret `PYPI_TOKEN` (pypa/gh-action-pypi-publish, username `__token__`
+# implied). The TestPyPI dry-run path still uses OIDC. See the runbook in
+# CHANGELOG.md.
 #
 # Triggers:
 #   * push of a tag matching  v*        -> real release to PyPI + GitHub Release
@@ -189,15 +188,10 @@ jobs:
   #     No API token: the `pypi` environment is the trusted publisher.
   # ---------------------------------------------------------------------------
   publish-pypi:
-    name: publish to PyPI (OIDC trusted publishing)
+    name: publish to PyPI (API token)
     needs: [build, site]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/project/pyspark-connect-web/${{ needs.build.outputs.version }}/
-    permissions:
-      id-token: write  # OIDC: mint the short-lived PyPI token
     steps:
       - name: Download dist
         uses: actions/download-artifact@v4
@@ -206,8 +200,11 @@ jobs:
           path: dist
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        # No `password:` - trusted publishing uses the OIDC id-token above.
-        # `repository-url` defaults to the real PyPI.
+        with:
+          # API token stored as the repo secret PYPI_TOKEN (username __token__ is
+          # implied by gh-action-pypi-publish when a password/token is given).
+          # `repository-url` defaults to the real PyPI.
+          password: ${{ secrets.PYPI_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # 3b. workflow_dispatch dry-run path: TestPyPI via OIDC (never real PyPI).

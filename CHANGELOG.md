@@ -45,16 +45,16 @@ the DOCS agent - see docs/packaging-release.md for the longer-form checklist):
   5. Cut it:
        git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
      The tag push runs release.yml: build sdist+wheel (assert no grpcio) ->
-     publish to PyPI via OIDC trusted publishing (environment `pypi`) -> build
-     the JupyterLite site -> create the GitHub Release with these notes +
-     dist/* + the site tarball attached.
+     publish to PyPI with the `PYPI_TOKEN` repo secret -> build the JupyterLite
+     site -> create the GitHub Release with these notes + dist/* + the site
+     tarball attached.
   6. Post-release: smoke-test the published site (crossOriginIsolated === true,
      demo notebook end-to-end against a reachable Connect server); update the
      README status; file a the project notes note for anything surprising.
 
-One-time setup (maintainer): register the repo as a trusted publisher on PyPI
-(and TestPyPI) for the `pypi`/`testpypi` GitHub Environments - no API token is
-ever stored in repo secrets.
+One-time setup (maintainer): store a PyPI API token as the `PYPI_TOKEN` repo
+secret (Settings -> Secrets and variables -> Actions). The TestPyPI dry-run path
+still uses OIDC trusted publishing for the `testpypi` environment.
 -->
 
 ## [0.1.0] - 2026-06-12
@@ -68,8 +68,13 @@ unchanged - no reimplementation, no local JVM, no Python backend.
 - **grpc-web transport** - a `fetch`-based grpc-web stub (length-prefixed
   framing, `0x80` trailer frame) that replaces *only* PySpark's Connect service
   stub. We patch, we do not fork. Implements
-  ExecutePlan / ReattachExecute / ReleaseExecute, so mid-stream disconnects
-  recover via reattach.
+  ExecutePlan / ReattachExecute / ReleaseExecute (see Known limitations for the
+  browser reattach constraint).
+- **Slim client (`pyspark-client`)** - the browser loads the pure-Python Spark
+  Connect client (`pyspark-client`, no JVM/py4j), installed via micropip with
+  `deps=False` (its grpcio/grpcio-status base deps are stubbed by the shim).
+  Verified against real Spark **4.0.0 and 4.1.2** servers; `pcw.install()` guards
+  `pyspark>=4.0`.
 - **JupyterLite/Pyodide bridge** - a Web Worker + `Atomics`/`SharedArrayBuffer`
   channel that makes Connect calls *blocking*, so `.collect()` / `.toPandas()`
   return synchronously and the public PySpark API stays unchanged. Page-side `Worker` wrapping wires the bridge into the
@@ -92,14 +97,17 @@ unchanged - no reimplementation, no local JVM, no Python backend.
 - **Pure-Python wheel** - `py3-none-any`, `dependencies = []`, **no `grpcio`**; CI guards the no-grpcio invariant at source, wheel-metadata,
   and import time.
 - **Packaging & release automation** - `python -m build` sdist + wheel, PyPI
-  publish via OIDC trusted publishing on a `vX.Y.Z` tag, JupyterLite site built
-  as a release asset, GitHub Release notes sourced from this changelog
+  publish via API token on a `vX.Y.Z` tag, JupyterLite site built as a release
+  asset, GitHub Release notes sourced from this changelog
   (`.github/workflows/release.yml`).
 
 ### Known limitations
-- Session-timezone localization and struct-handling-mode are not applied on the
-  result-decode side (no client config on a bare response iterable); the only
-  known gap to byte-exact parity for timestamp/struct columns.
+- **In-browser mid-stream reattach recovery is unavailable.** PySpark recovers a
+  dropped operation by reading `INVALID_HANDLE.OPERATION_NOT_FOUND` from the gRPC
+  trailer status via `grpcio-status`, which grpc-web cannot carry in the browser.
+  A browser query whose connection drops mid-stream errors rather than resuming.
+  Reattach recovery over real gRPC IS verified server-side
+  (`tests/integration/`); the browser e2e marks this case as a known skip.
 - The package does not yet ship a PEP 561 `py.typed` marker (owned by the
   package source lanes; tracked in CONTRIBUTING.md / docs/packaging-release.md).
 - `AddArtifacts` is lowered to a single grpc-web `unary()` POST (grpc-web has no

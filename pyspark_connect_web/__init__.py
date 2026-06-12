@@ -31,7 +31,7 @@ from .patch import (
     uninstall,
 )
 
-__version__ = "0.0.1.dev0"
+__version__ = "0.1.0"
 
 __all__ = [
     "__version__",

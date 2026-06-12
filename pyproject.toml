@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyspark-connect-web"
-version = "0.0.1.dev0"
+version = "0.1.0"
 description = "Run the PySpark Connect client in JupyterLite/Pyodide via a grpc-web transport (PySpark in JupyterLite)."
 readme = "README.md"
 requires-python = ">=3.11"

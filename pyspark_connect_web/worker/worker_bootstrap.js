@@ -44,7 +44,7 @@ const MICROPIP_PKGS = [
   // The pyspark_connect_web wheel is served at the site root too (no deps).
   self.PCW_WHEEL_URL ||
     new URL(
-      "/pyspark_connect_web-0.0.1.dev0-py3-none-any.whl",
+      "/pyspark_connect_web-0.1.0-py3-none-any.whl",
       self.location.origin,
     ).href,
 ];

@@ -3,7 +3,6 @@
 # pyspark-connect-web - PySpark in JupyterLite
 
 [![CI](https://github.com/HyukjinKwon/pyspark-client-wasm/actions/workflows/ci.yml/badge.svg)](https://github.com/HyukjinKwon/pyspark-client-wasm/actions/workflows/ci.yml)
-[![e2e](https://github.com/HyukjinKwon/pyspark-client-wasm/actions/workflows/e2e.yml/badge.svg)](https://github.com/HyukjinKwon/pyspark-client-wasm/actions/workflows/e2e.yml)
 [![PyPI](https://img.shields.io/pypi/v/pyspark-connect-web.svg)](https://pypi.org/project/pyspark-connect-web/)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://hyukjinkwon.github.io/pyspark-client-wasm/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
@@ -218,12 +217,13 @@ docker compose -f deploy/compose.yaml up   # Spark Connect + Envoy + static host
 open http://localhost:8000/demo/
 ```
 
-It is **covered by CI on every push**: a static gate validates the page JS and
-the embedded in-browser Python on the cheap [`ci.yml`](.github/workflows/ci.yml)
-`demo` job (no browser), and the real browser run - boot, seed, list tables,
-`DESCRIBE`, run SQL, assert the result grid - is driven against the live stack by
-[`tests/e2e/demo.spec.ts`](tests/e2e/demo.spec.ts) in
-[`e2e.yml`](.github/workflows/e2e.yml). See [`demo/README.md`](demo/README.md).
+It is **covered by [CI](.github/workflows/ci.yml) on every push**: a static gate
+validates the page JS and the embedded in-browser Python (`demo` job), and
+[`tests/integration/test_demo_queries.py`](tests/integration/test_demo_queries.py)
+runs the demo's queries against a live Spark Connect server over the grpc-web
+bridge (`integration` job, no browser). The full page is additionally driven in a
+real browser by [`tests/e2e/demo.spec.ts`](tests/e2e/demo.spec.ts). See
+[`demo/README.md`](demo/README.md).
 
 ### DataFrame API examples
 

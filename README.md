@@ -217,13 +217,7 @@ docker compose -f deploy/compose.yaml up   # Spark Connect + Envoy + static host
 open http://localhost:8000/demo/
 ```
 
-It is **covered by [CI](.github/workflows/ci.yml) on every push**: a static gate
-validates the page JS and the embedded in-browser Python (`demo` job), and
-[`tests/integration/test_demo_queries.py`](tests/integration/test_demo_queries.py)
-runs the demo's queries against a live Spark Connect server over the grpc-web
-bridge (`integration` job, no browser). The full page is additionally driven in a
-real browser by [`tests/e2e/demo.spec.ts`](tests/e2e/demo.spec.ts). See
-[`demo/README.md`](demo/README.md).
+See [`demo/README.md`](demo/README.md) for details.
 
 ### DataFrame API examples
 

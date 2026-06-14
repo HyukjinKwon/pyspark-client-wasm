@@ -7,6 +7,12 @@ Run the **real** PySpark Connect Python client inside a browser
 transport. Your existing PySpark code runs unchanged - no reimplementation, no
 local JVM, no Python backend server.
 
+![PySpark BI: boot PySpark in the browser, pick a table, run SQL, see results, querying a real Spark Connect server over grpc-web](demo.gif)
+
+> The embedded BI query cell demo recorded in CI against a real Spark Connect
+> server: PySpark boots in the browser tab, then picks a table, runs SQL, and
+> renders results. No JVM, no `pip install pyspark`, no client setup.
+
 ```python
 import pyspark_connect_web as pcw
 pcw.install()

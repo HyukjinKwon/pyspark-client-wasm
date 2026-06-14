@@ -17,5 +17,6 @@ deploy/envoy.prod.rendered.yaml
 tests/e2e/reference.json
 tests/e2e/test-results/
 tests/e2e/playwright-report/
+tests/e2e/demo-video/
 .coverage
 site/

@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  demo/index.html - "Embedded BI query cell"
+
+  A small, product-style BI page that runs the REAL PySpark Connect client in the
+  browser (Pyodide) and talks to a Spark Connect server through Envoy's grpc-web
+  proxy - no JVM, no `pip install pyspark`, no client setup. Just a browser tab.
+
+  It is the same boot path as jupyterlite/harness.html (module worker +
+  worker_bootstrap.js + the SAB/Atomics bridge in worker/bridge.js), with a BI
+  UI layered on top of window.__pcwRunPython:
+
+    * picks a table  (a synthetic retail dataset: customers / products / orders)
+    * shows its schema
+    * runs SQL you type, against Spark, and renders the result grid
+    * ships with example analytics queries over that dataset
+
+  The dataset is defined as deterministic CTEs and injected into every query, so
+  every statement sent to Spark is a data-returning SELECT (no DDL). The demo
+  touches Spark only through toPandas; schemas and the table list need no RPC.
+  This keeps it on the proven transport path and works on any Spark Connect
+  server with no warehouse writes. See demo/README.md.
+
+  MUST be served cross-origin isolated (deploy/ Envoy sets COOP/COEP on :8000),
+  and the same-origin /worker/, /pyodide/ and *.whl assets must be present (they
+  are, once `scripts/build_site.sh` has produced _output). See demo/README.md.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PySpark BI - query Spark from your browser</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --ink: #1b2733;
+        --muted: #6b7785;
+        --line: #e3e7ec;
+        --accent: #e25a1b;   /* Spark orange */
+        --accent-ink: #ffffff;
+        --code-bg: #0f1722;
+        --code-ink: #e6edf3;
+        --ok: #1a8a4f;
+        --err: #c0392b;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+      }
+      header .logo {
+        width: 26px; height: 26px; border-radius: 6px;
+        background: var(--accent); color: #fff;
+        display: grid; place-items: center; font-weight: 800; font-size: 15px;
+      }
+      header h1 { font-size: 15px; margin: 0; font-weight: 700; }
+      header .sub { color: var(--muted); font-size: 12px; }
+      header .spacer { flex: 1; }
+      .pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+        background: #eef1f4; color: var(--muted);
+      }
+      .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+      .pill.ready { background: #e7f6ee; color: var(--ok); }
+      .pill.ready .dot { background: var(--ok); }
+      .pill.error { background: #fdecea; color: var(--err); }
+      .pill.error .dot { background: var(--err); }
+      .endpoint { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+
+      main { flex: 1; display: flex; min-height: 0; }
+
+      /* sidebar */
+      aside {
+        width: 260px; flex: none; background: var(--panel);
+        border-right: 1px solid var(--line); overflow-y: auto; padding: 14px;
+      }
+      aside h2 {
+        font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+        color: var(--muted); margin: 0 0 8px;
+      }
+      .tbl {
+        padding: 7px 10px; border-radius: 7px; cursor: pointer;
+        display: flex; align-items: center; gap: 8px; user-select: none;
+      }
+      .tbl:hover { background: #f1f3f6; }
+      .tbl.active { background: #fdece4; color: var(--accent); font-weight: 600; }
+      .tbl .ico { color: var(--muted); }
+      .tbl.active .ico { color: var(--accent); }
+      .schema { margin: 4px 0 12px 6px; border-left: 2px solid var(--line); padding-left: 10px; }
+      .schema .col { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+      .schema .col .name { color: var(--ink); }
+      .schema .col .type { color: var(--muted); font: 11px ui-monospace, Menlo, monospace; }
+      aside .empty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
+
+      /* workspace */
+      section { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 14px; gap: 12px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+      .editor-card { display: flex; flex-direction: column; }
+      .editor-head {
+        display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .editor-head .title { font-weight: 600; font-size: 13px; }
+      .editor-head .spacer { flex: 1; }
+      .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+      .chip {
+        font-size: 12px; padding: 4px 9px; border: 1px solid var(--line);
+        border-radius: 999px; background: #fff; cursor: pointer; color: var(--muted);
+      }
+      .chip:hover { border-color: var(--accent); color: var(--accent); }
+      textarea#sql {
+        width: 100%; border: 0; resize: vertical; min-height: 120px; padding: 12px;
+        background: var(--code-bg); color: var(--code-ink);
+        font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+        border-radius: 0 0 10px 10px; outline: none;
+      }
+      .run-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
+      button.run {
+        background: var(--accent); color: var(--accent-ink); border: 0; cursor: pointer;
+        font-weight: 700; font-size: 13px; padding: 9px 18px; border-radius: 8px;
+      }
+      button.run:disabled { opacity: .5; cursor: not-allowed; }
+      .run-row .hint { color: var(--muted); font-size: 12px; }
+      .run-row .stat { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+      .results-card { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+      .results-head {
+        padding: 8px 12px; border-bottom: 1px solid var(--line);
+        display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600;
+      }
+      .results-head .meta { font-weight: 400; color: var(--muted); }
+      .grid-wrap { overflow: auto; flex: 1; }
+      table.grid { border-collapse: collapse; width: 100%; font-size: 13px; }
+      table.grid th, table.grid td {
+        text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+      }
+      table.grid thead th {
+        position: sticky; top: 0; background: #f3f5f8; color: var(--ink);
+        font-weight: 700; border-bottom: 2px solid var(--line); z-index: 1;
+      }
+      table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
+      table.grid td.null { color: #b6bec8; font-style: italic; }
+      table.grid tbody tr:hover { background: #fafbfc; }
+      .placeholder { padding: 28px; color: var(--muted); }
+      .err-box {
+        margin: 12px; padding: 12px 14px; background: #fdecea; border: 1px solid #f4c7c0;
+        color: var(--err); border-radius: 8px; white-space: pre-wrap;
+        font: 12px/1.5 ui-monospace, Menlo, monospace;
+      }
+
+      /* boot overlay */
+      #overlay {
+        position: fixed; inset: 0; background: rgba(246,247,249,.96);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 14px; z-index: 50; text-align: center; padding: 24px;
+      }
+      #overlay .logo { width: 48px; height: 48px; border-radius: 12px; font-size: 26px; }
+      #overlay h2 { margin: 4px 0 0; font-size: 18px; }
+      #overlay .steps { color: var(--muted); font-size: 13px; max-width: 460px; }
+      #overlay .bar { width: 280px; height: 6px; background: #e3e7ec; border-radius: 999px; overflow: hidden; }
+      #overlay .bar > i { display: block; height: 100%; width: 30%; background: var(--accent); border-radius: 999px; transition: width .4s ease; }
+      #overlay .fail { color: var(--err); max-width: 520px; font-size: 13px; }
+      #overlay code { background: #eceff3; padding: 1px 5px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="logo">S</div>
+      <div>
+        <h1>PySpark BI</h1>
+        <div class="sub">real PySpark, in your browser, no install</div>
+      </div>
+      <div class="spacer"></div>
+      <span class="endpoint" id="endpoint"></span>
+      <span class="pill" id="status"><span class="dot"></span><span id="status-text">booting...</span></span>
+    </header>
+
+    <main>
+      <aside>
+        <h2>Tables</h2>
+        <div id="tables"><div class="empty">-</div></div>
+      </aside>
+
+      <section>
+        <div class="card editor-card">
+          <div class="editor-head">
+            <span class="title">SQL</span>
+            <span class="spacer"></span>
+            <div class="chips" id="examples"></div>
+          </div>
+          <textarea id="sql" spellcheck="false" placeholder="SELECT * FROM orders LIMIT 100"></textarea>
+          <div class="run-row">
+            <button class="run" id="run" disabled>Run</button>
+            <span class="hint">&#8984;/Ctrl + Enter</span>
+            <span class="stat" id="runstat"></span>
+          </div>
+        </div>
+
+        <div class="card results-card">
+          <div class="results-head">
+            Results <span class="meta" id="resmeta"></span>
+          </div>
+          <div class="grid-wrap" id="results">
+            <div class="placeholder">Run a query to see results.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="overlay">
+      <div class="logo" style="background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800;">S</div>
+      <h2>Starting PySpark in your browser</h2>
+      <div class="bar"><i id="bar"></i></div>
+      <div class="steps" id="boot-steps">loading Pyodide...</div>
+      <div class="fail" id="boot-fail" style="display:none"></div>
+    </div>
+
+    <script type="module">
+      import { installBridge } from "/worker/bridge.js";
+
+      // ----- config -----------------------------------------------------------
+      const SPARK_REMOTE =
+        new URLSearchParams(location.search).get("remote") ||
+        "sc://localhost:8081/;transport=grpcweb";
+      const DISPLAY_LIMIT = 1000; // max rows pulled to the browser for display
+      const RESULT_MARK = "@@PCW@@"; // stdout sentinel our Python helpers print
+
+      // ----- worker + blocking bridge (mirrors harness.html) ------------------
+      const worker = new Worker("/worker/worker_bootstrap.js", { type: "module" });
+      installBridge(worker); // attaches the SAB; drives the grpc-web fetch
+
+      let seq = 0;
+      const pending = new Map();
+      worker.addEventListener("message", (ev) => {
+        const m = ev.data || {};
+        if (m.type === "pcw_result" && pending.has(m.id)) {
+          pending.get(m.id).resolve(m.result);
+          pending.delete(m.id);
+        } else if (m.type === "pcw_run_error" && pending.has(m.id)) {
+          pending.get(m.id).reject(new Error(m.message));
+          pending.delete(m.id);
+        }
+      });
+      function runPython(code) {
+        const id = ++seq;
+        return new Promise((resolve, reject) => {
+          pending.set(id, { resolve, reject });
+          worker.postMessage({ type: "pcw_run", id, code });
+        });
+      }
+      const ready = new Promise((resolve, reject) => {
+        worker.addEventListener("message", (ev) => {
+          const m = ev.data || {};
+          if (m.type === "pcw_ready") resolve();
+          else if (m.type === "pcw_error") reject(new Error(m.message));
+        });
+      });
+
+      // Run a helper that prints `RESULT_MARK + json`, and parse that line.
+      async function call(code) {
+        const out = await runPython(code);
+        const i = out.lastIndexOf(RESULT_MARK);
+        if (i < 0) throw new Error("no result marker in output:\n" + out);
+        return JSON.parse(out.slice(i + RESULT_MARK.length).trim());
+      }
+
+      // ----- Python side: install patch, bind spark, seed data, helpers -------
+      // Printed payloads are JSON, prefixed with RESULT_MARK so stray stdout
+      // (warnings, etc.) never corrupts the parse.
+      const PY_BOOTSTRAP = [
+        "import json, base64, math",
+        "import pyspark_connect_web as pcw",
+        "pcw.install()",
+        "from pyspark.sql import SparkSession",
+        "spark = SparkSession.builder.remote(" + JSON.stringify(SPARK_REMOTE) + ").getOrCreate()",
+        "",
+        "MARK = " + JSON.stringify(RESULT_MARK),
+        "",
+        "def _emit(obj):",
+        "    print(MARK + json.dumps(obj))",
+        "",
+        "def _jsonable(v):",
+        "    if v is None:",
+        "        return None",
+        "    if isinstance(v, float) and math.isnan(v):",
+        "        return None",
+        "    if isinstance(v, bool):",
+        "        return v",
+        "    if isinstance(v, (int, str)):",
+        "        return v",
+        "    if isinstance(v, float):",
+        "        return v",
+        "    return str(v)",
+        "",
+        "# The synthetic retail dataset, defined as CTEs (deterministic seeded",
+        "# rand/pmod). We inject these into every query so the demo's 'tables' need",
+        "# no DDL: every statement sent to Spark is a data-returning SELECT. This is",
+        "# deliberate - CREATE/temp-view COMMAND responses currently livelock the",
+        "# grpc-web reattach path, while SELECT results work. Same dataset for every",
+        "# visitor, no warehouse writes, works on any Spark Connect server.",
+        "_CTES = '''",
+        "  products AS (",
+        "    SELECT id AS product_id,",
+        "           element_at(array('Widget','Gadget','Gizmo','Doohickey','Sprocket','Cog','Lever','Valve'), cast(pmod(id,8) as int)+1) || ' #' || cast(id as string) AS product_name,",
+        "           element_at(array('Electronics','Home','Toys','Sports','Office'), cast(pmod(id,5) as int)+1) AS category,",
+        "           round(5 + pmod(id*7919, 19500)/100.0, 2) AS price",
+        "    FROM range(50)),",
+        "  customers AS (",
+        "    SELECT id AS customer_id,",
+        "           'Customer ' || cast(id as string) AS name,",
+        "           element_at(array('US','UK','DE','FR','JP','IN','BR','CA'), cast(pmod(id,8) as int)+1) AS country,",
+        "           date_add(date'2023-01-01', cast(pmod(id*7,700) as int)) AS signup_date",
+        "    FROM range(200)),",
+        "  orders AS (",
+        "    SELECT id AS order_id,",
+        "           cast(pmod(id*31+7, 200) as bigint) AS customer_id,",
+        "           cast(pmod(id*17+3, 50) as bigint) AS product_id,",
+        "           cast(1 + pmod(id*13, 5) as int) AS quantity,",
+        "           date_add(date'2024-01-01', cast(pmod(id*3, 365) as int)) AS order_date",
+        "    FROM range(5000))",
+        "'''",
+        "",
+        "_TABLES = ['customers', 'orders', 'products']",
+        "",
+        "def _wrap(sql):",
+        "    s = sql.strip().rstrip(';').strip()",
+        "    if s[:5].lower() == 'with ':",
+        "        return 'WITH ' + _CTES + ',\\n' + s[5:]",
+        "    return 'WITH ' + _CTES + '\\n' + s",
+        "",
+        "# Known schemas of the CTE 'tables' (matches _CTES above). Returned without",
+        "# an RPC: .schema / .columns issue an AnalyzePlan, which - like command",
+        "# responses - currently hangs the grpc-web reattach path. We touch Spark only",
+        "# via toPandas (ExecutePlan), the proven path.",
+        "_SCHEMAS = {",
+        "    'products': [['product_id','bigint'],['product_name','string'],['category','string'],['price','double']],",
+        "    'customers': [['customer_id','bigint'],['name','string'],['country','string'],['signup_date','date']],",
+        "    'orders': [['order_id','bigint'],['customer_id','bigint'],['product_id','bigint'],['quantity','int'],['order_date','date']],",
+        "}",
+        "",
+        "def pcw_tables():",
+        "    _emit(_TABLES)",
+        "",
+        "def pcw_describe(b64):",
+        "    name = base64.b64decode(b64).decode('utf-8')",
+        "    _emit(_SCHEMAS.get(name, []))",
+        "",
+        "def pcw_query(b64, limit):",
+        "    sql = base64.b64decode(b64).decode('utf-8')",
+        "    # toPandas() == ExecutePlan only. We deliberately do NOT touch sdf.columns",
+        "    # / sdf.schema (AnalyzePlan), which hangs the grpc-web bridge; derive the",
+        "    # column names and types from the returned pandas frame instead.",
+        "    pdf = spark.sql(_wrap(sql)).limit(limit + 1).toPandas()",
+        "    truncated = len(pdf) > limit",
+        "    pdf = pdf.head(limit)",
+        "    cols = [str(c) for c in pdf.columns]",
+        "    numeric = [bool(str(pdf[c].dtype).startswith(('int','float','uint'))) for c in pdf.columns]",
+        "    rows = [[_jsonable(v) for v in rec] for rec in pdf.itertuples(index=False, name=None)]",
+        "    _emit({'columns': cols, 'numeric': numeric, 'rows': rows, 'shown': len(rows), 'truncated': truncated})",
+        "",
+        "_emit({'ok': True})",
+      ].join("\n");
+
+      // ----- UI plumbing ------------------------------------------------------
+      const $ = (id) => document.getElementById(id);
+      const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
+      const esc = (s) =>
+        String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+      function setStatus(kind, text) {
+        const pill = $("status");
+        pill.className = "pill" + (kind ? " " + kind : "");
+        $("status-text").textContent = text;
+      }
+      function bootStep(text, pct) {
+        $("boot-steps").textContent = text;
+        if (pct != null) $("bar").style.width = pct + "%";
+      }
+      function bootFail(msg) {
+        $("bar").style.background = "var(--err)";
+        const f = $("boot-fail");
+        f.style.display = "block";
+        f.innerHTML = msg;
+        setStatus("error", "failed");
+      }
+
+      const EXAMPLES = [
+        {
+          label: "Top products by revenue",
+          sql:
+            "SELECT p.product_name, p.category,\n" +
+            "       round(sum(o.quantity * p.price), 2) AS revenue,\n" +
+            "       sum(o.quantity) AS units\n" +
+            "FROM orders o JOIN products p ON o.product_id = p.product_id\n" +
+            "GROUP BY p.product_name, p.category\n" +
+            "ORDER BY revenue DESC\n" +
+            "LIMIT 10",
+        },
+        {
+          label: "Revenue by country",
+          sql:
+            "SELECT c.country, count(*) AS orders,\n" +
+            "       round(sum(o.quantity * p.price), 2) AS revenue\n" +
+            "FROM orders o\n" +
+            "JOIN customers c ON o.customer_id = c.customer_id\n" +
+            "JOIN products  p ON o.product_id  = p.product_id\n" +
+            "GROUP BY c.country\n" +
+            "ORDER BY revenue DESC",
+        },
+        {
+          label: "Monthly revenue",
+          sql:
+            "SELECT date_trunc('month', o.order_date) AS month,\n" +
+            "       count(*) AS orders,\n" +
+            "       round(sum(o.quantity * p.price), 2) AS revenue\n" +
+            "FROM orders o JOIN products p ON o.product_id = p.product_id\n" +
+            "GROUP BY 1 ORDER BY 1",
+        },
+        {
+          label: "Top customers",
+          sql:
+            "SELECT c.name, c.country, count(*) AS orders,\n" +
+            "       round(sum(o.quantity * p.price), 2) AS spend\n" +
+            "FROM orders o JOIN customers c ON o.customer_id = c.customer_id\n" +
+            "JOIN products p ON o.product_id = p.product_id\n" +
+            "GROUP BY c.name, c.country\n" +
+            "ORDER BY spend DESC LIMIT 10",
+        },
+      ];
+
+      function renderExamples() {
+        $("examples").innerHTML = "";
+        for (const ex of EXAMPLES) {
+          const c = document.createElement("span");
+          c.className = "chip";
+          c.textContent = ex.label;
+          c.onclick = () => {
+            $("sql").value = ex.sql;
+          };
+          $("examples").appendChild(c);
+        }
+      }
+
+      let activeTable = null;
+      async function renderTables() {
+        const names = await call("pcw_tables()");
+        const box = $("tables");
+        box.innerHTML = "";
+        if (!names.length) {
+          box.innerHTML = '<div class="empty">no tables</div>';
+          return;
+        }
+        for (const name of names) {
+          const row = document.createElement("div");
+          row.className = "tbl";
+          row.innerHTML = '<span class="ico">&#9707;</span>' + esc(name);
+          const schema = document.createElement("div");
+          schema.className = "schema";
+          schema.style.display = "none";
+          row.onclick = async () => {
+            document.querySelectorAll(".tbl").forEach((t) => t.classList.remove("active"));
+            row.classList.add("active");
+            $("sql").value = "SELECT * FROM " + name + " LIMIT 100";
+            if (schema.dataset.loaded !== "1") {
+              schema.innerHTML = '<div class="col"><span class="name">loading...</span></div>';
+              schema.style.display = "block";
+              const cols = await call('pcw_describe("' + b64(name) + '")');
+              schema.innerHTML = cols
+                .map(
+                  (c) =>
+                    '<div class="col"><span class="name">' +
+                    esc(c[0]) +
+                    '</span><span class="type">' +
+                    esc(c[1]) +
+                    "</span></div>"
+                )
+                .join("");
+              schema.dataset.loaded = "1";
+            } else {
+              schema.style.display = schema.style.display === "none" ? "block" : "none";
+            }
+            activeTable = name;
+          };
+          box.appendChild(row);
+          box.appendChild(schema);
+        }
+      }
+
+      function renderResults(res, ms) {
+        const wrap = $("results");
+        const meta = $("resmeta");
+        if (!res.columns.length) {
+          wrap.innerHTML = '<div class="placeholder">Query ran (no columns returned).</div>';
+          meta.textContent = "";
+          return;
+        }
+        let html = "<table class='grid'><thead><tr>";
+        for (const c of res.columns) html += "<th>" + esc(c) + "</th>";
+        html += "</tr></thead><tbody>";
+        for (const row of res.rows) {
+          html += "<tr>";
+          row.forEach((v, i) => {
+            if (v === null) html += "<td class='null'>NULL</td>";
+            else if (res.numeric[i]) html += "<td class='num'>" + esc(v) + "</td>";
+            else html += "<td>" + esc(v) + "</td>";
+          });
+          html += "</tr>";
+        }
+        html += "</tbody></table>";
+        wrap.innerHTML = html;
+        meta.textContent =
+          res.shown +
+          (res.truncated ? "+ rows (showing first " + DISPLAY_LIMIT + ")" : " rows") +
+          " | " +
+          ms +
+          " ms";
+      }
+
+      let running = false;
+      async function run() {
+        if (running) return;
+        const sql = $("sql").value.trim().replace(/;\s*$/, "");
+        if (!sql) return;
+        running = true;
+        $("run").disabled = true;
+        $("runstat").textContent = "running...";
+        const t0 = performance.now();
+        try {
+          const res = await call('pcw_query("' + b64(sql) + '", ' + DISPLAY_LIMIT + ")");
+          renderResults(res, Math.round(performance.now() - t0));
+          $("runstat").textContent = "";
+          // a query may have created/dropped tables; cheap to refresh
+        } catch (e) {
+          $("results").innerHTML = '<div class="err-box">' + esc(e.message) + "</div>";
+          $("resmeta").textContent = "";
+          $("runstat").textContent = "error";
+        } finally {
+          running = false;
+          $("run").disabled = false;
+        }
+      }
+
+      $("run").onclick = run;
+      $("sql").addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          e.preventDefault();
+          run();
+        }
+      });
+
+      // ----- boot -------------------------------------------------------------
+      async function boot() {
+        $("endpoint").textContent = SPARK_REMOTE;
+        renderExamples();
+        if (self.crossOriginIsolated !== true) {
+          window.__pcwDemoError = "not cross-origin isolated (no SharedArrayBuffer)";
+          bootFail(
+            "This page is <b>not cross-origin isolated</b>, so SharedArrayBuffer " +
+              "is unavailable and the blocking bridge can't run.<br><br>Serve it behind " +
+              "the deploy/ Envoy (which sets <code>COOP: same-origin</code> + " +
+              "<code>COEP: credentialless</code>) and open it at " +
+              "<code>http://localhost:8000/demo/</code>."
+          );
+          return;
+        }
+        try {
+          bootStep("loading Pyodide + PySpark wheels (~15-30s on first load)...", 20);
+          worker.postMessage({ type: "pcw_boot" });
+          await ready;
+          bootStep("connecting to Spark (" + SPARK_REMOTE + ")...", 55);
+          await call(PY_BOOTSTRAP);
+          bootStep("loading tables...", 85);
+          await renderTables();
+          bootStep("ready", 100);
+          $("overlay").style.display = "none";
+          setStatus("ready", "connected");
+          $("run").disabled = false;
+          $("sql").value = EXAMPLES[0].sql;
+          // behavior-neutral readiness hook the e2e (tests/e2e/demo.spec.ts) waits on
+          window.__pcwDemoReady = true;
+        } catch (e) {
+          window.__pcwDemoError = String((e && e.message) || e);
+          bootFail(
+            "Boot failed: " +
+              esc((e && e.message) || e) +
+              "<br><br>Is the Spark Connect server up and reachable at " +
+              "<code>" +
+              esc(SPARK_REMOTE) +
+              "</code>? Bring up the stack with " +
+              "<code>docker compose -f deploy/compose.yaml up</code>."
+          );
+        }
+      }
+      boot();
+    </script>
+  </body>
+</html>

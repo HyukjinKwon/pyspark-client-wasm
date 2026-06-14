@@ -13,6 +13,10 @@
 #; runs scripts/validate_deploy.py
 #   * build-wheel   - builds the wheel and asserts it imports + carries no
 #                     grpcio dependency
+#   * demo          - static-validates the embedded BI demo (demo/index.html):
+#                     the page JS parses, the embedded Python bootstrap compiles,
+#                     and the build helper stages it. The REAL browser run of the
+#                     demo lives in e2e.yml (tests/e2e/demo.spec.ts).
 #
 # The e2e job is intentionally NOT a required gate yet: the browser stack
 # (the components + JupyterLite build) is not runnable in CI, so e2e would skip. A
@@ -181,6 +185,23 @@ jobs:
         with:
           name: wheel
           path: dist/*.whl
+
+  demo:
+    name: validate BI demo (static)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # No browser, no docker: just prove the demo page's JS parses, its embedded
+      # in-browser Python bootstrap compiles, and the build helper stages it. The
+      # real end-to-end browser run is the `demo` spec in e2e.yml.
+      - name: validate demo (scripts/validate_demo.sh)
+        run: bash scripts/validate_demo.sh
 
   # ---------------------------------------------------------------------------
   # e2e (DISABLED until the browser stack lands). Uncomment + set

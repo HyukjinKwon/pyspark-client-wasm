@@ -3,6 +3,7 @@
 # pyspark-connect-web - PySpark in JupyterLite
 
 [![CI](https://github.com/HyukjinKwon/pyspark-client-wasm/actions/workflows/ci.yml/badge.svg)](https://github.com/HyukjinKwon/pyspark-client-wasm/actions/workflows/ci.yml)
+[![e2e](https://github.com/HyukjinKwon/pyspark-client-wasm/actions/workflows/e2e.yml/badge.svg)](https://github.com/HyukjinKwon/pyspark-client-wasm/actions/workflows/e2e.yml)
 [![PyPI](https://img.shields.io/pypi/v/pyspark-connect-web.svg)](https://pypi.org/project/pyspark-connect-web/)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://hyukjinkwon.github.io/pyspark-client-wasm/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
@@ -11,6 +12,12 @@ Run the **real** PySpark Connect Python client inside a browser
 (JupyterLite/Pyodide), talking to an Apache Spark Connect server through a
 grpc-web transport. Your existing PySpark code runs unchanged - no
 reimplementation, no local JVM, no Python backend server.
+
+![PySpark BI: boot PySpark in the browser, pick a table, run SQL, see results, querying a real Spark Connect server over grpc-web](docs/demo.gif)
+
+> The embedded [BI query cell demo](demo/) recorded in CI against a real Spark
+> Connect server: PySpark boots in the browser tab, then picks a table, runs SQL,
+> and renders results.
 
 ```python
 import pyspark_connect_web as pcw
@@ -195,6 +202,28 @@ E2E_REQUIRE_STACK=1 npx playwright test          # full steps in tests/e2e/READM
 ```
 
 It also runs on every push - see [`.github/workflows/e2e.yml`](.github/workflows/e2e.yml).
+
+### 4. The embedded BI query cell (demo)
+
+[`demo/`](demo/) is a small, product-style page that uses pyspark-connect-web as
+a **live query cell**: pick a table, write SQL, and see results, with the real
+PySpark Connect client running in the browser tab. It ships a synthetic retail
+dataset (`customers`, `products`, `orders`) and example analytics queries.
+
+![Embedded BI query cell: pick a table, write SQL, see results, all in the browser](docs/demo.gif)
+
+```bash
+scripts/build_demo_site.sh                 # build the site + stage the demo at /demo/
+docker compose -f deploy/compose.yaml up   # Spark Connect + Envoy + static host
+open http://localhost:8000/demo/
+```
+
+It is **covered by CI on every push**: a static gate validates the page JS and
+the embedded in-browser Python on the cheap [`ci.yml`](.github/workflows/ci.yml)
+`demo` job (no browser), and the real browser run - boot, seed, list tables,
+`DESCRIBE`, run SQL, assert the result grid - is driven against the live stack by
+[`tests/e2e/demo.spec.ts`](tests/e2e/demo.spec.ts) in
+[`e2e.yml`](.github/workflows/e2e.yml). See [`demo/README.md`](demo/README.md).
 
 ### DataFrame API examples
 

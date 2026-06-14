@@ -98,6 +98,7 @@ nav:
       - Quickstart: quickstart.md
       - Running locally: running-locally.md
   - Guides:
+      - Embedded BI demo: demo.md
       - Connection patterns: connection-patterns.md
       - JupyterLite hosting: jupyterlite-hosting.md
       - Packaging & release: packaging-release.md

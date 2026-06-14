@@ -21,6 +21,11 @@
 #   5. spark.sql("select 1 as x").collect() works
 #   6. mid-stream disconnect recovers via ReattachExecute
 #
+# It also drives the embedded BI query cell demo (demo/index.html) through its UI
+# - seed the retail dataset, list tables, DESCRIBE, run SQL, render the grid -
+# proving the "embed pyspark-connect-web as a query cell" use case end-to-end
+# (tests/e2e/demo.spec.ts; the page is staged into the site at /demo/ below).
+#
 # This is a SEPARATE workflow from ci.yml (unit/lint/grpcio-guard/headers/wheel);
 # ci.yml stays the cheap, always-on gate. This one is heavier (docker + browser)
 # and is expected to be flaky on its FIRST real runs - see the candid notes at the
@@ -65,6 +70,9 @@ jobs:
       E2E_REFERENCE: ${{ github.workspace }}/tests/e2e/reference.json
       # HARD-FAIL the checklist instead of skipping - this is the whole point.
       E2E_REQUIRE_STACK: "1"
+      # The embedded BI query cell demo (demo/index.html), staged into the built
+      # site at /demo/ below and driven end-to-end by tests/e2e/demo.spec.ts.
+      E2E_DEMO_URL: http://localhost:8000/demo/
 
     steps:
       # -------------------------------------------------------------------
@@ -172,6 +180,18 @@ jobs:
           # The JupyterLite app itself must have built (index.html at the root).
           test -f "${PCW_OUTPUT_DIR}/index.html" \
             || echo "::warning::no index.html at ${PCW_OUTPUT_DIR} root; jupyter lite may emit it under a subpath - the static host serves the dir verbatim"
+
+      - name: Stage the embedded BI demo into the site (/demo/)
+        run: |
+          set -euxo pipefail
+          # The demo page references the site-root-absolute /worker/, /pyodide/ and
+          # *.whl assets `make site` produced, so it only needs to live under the
+          # same (cross-origin-isolated) origin. Lay it in at /demo/ for the static
+          # host to serve. tests/e2e/demo.spec.ts then drives it via E2E_DEMO_URL.
+          mkdir -p "${PCW_OUTPUT_DIR}/demo"
+          cp demo/index.html "${PCW_OUTPUT_DIR}/demo/index.html"
+          test -f "${PCW_OUTPUT_DIR}/demo/index.html" \
+            || { echo "::error::BI demo not staged into ${PCW_OUTPUT_DIR}/demo"; exit 1; }
 
       # -------------------------------------------------------------------
       # 2. bring up the real stack (Spark Connect + Envoy grpc-web + static)
@@ -337,6 +357,17 @@ jobs:
           name: playwright-test-results
           path: tests/e2e/test-results
           if-no-files-found: ignore
+          retention-days: 14
+
+      # The recorded BI demo session (tests/e2e/demo.spec.ts) - a REAL run against
+      # the live stack. Downloaded and converted to the README/docs demo GIF.
+      - name: Upload BI demo recording
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-video
+          path: tests/e2e/demo-video
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Upload docker compose logs + Envoy snapshots + reference.json

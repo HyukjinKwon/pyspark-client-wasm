@@ -64,11 +64,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Prove the >=4.0 claim against BOTH the 4.0 and 4.1 lines (matched
+        # Prove the >=4.0 claim against the 4.0, 4.1 and 4.2 lines (matched
         # client+server pairs). Spark Connect's wire protocol is stable across
         # 4.x, so the pcw grpc-web client + framing must round-trip on each.
         # (4.1.0/4.1.1 were never published; 4.1.2 is the latest 4.1.x.)
-        spark: ["4.0.0", "4.1.2"]
+        spark: ["4.0.0", "4.1.2", "4.2.0"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

@@ -67,8 +67,8 @@ jobs:
         # Prove the >=4.0 claim against the 4.0, 4.1, 4.2 and 4.3 lines (matched
         # client+server pairs). Spark Connect's wire protocol is stable across
         # 4.x, so the pcw grpc-web client + framing must round-trip on each.
-        # (4.1.0/4.1.1 were never published; 4.1.2 is the latest 4.1.x.)
-        spark: ["4.0.0", "4.1.2", "4.2.0", "4.3.0"]
+        # Track the latest patch release of each line on PyPI.
+        spark: ["4.0.5", "4.1.4", "4.2.1", "4.3.0"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

@@ -102,7 +102,7 @@ browser), download a Spark release (needs Java 17) and start its Connect server.
 Recent Spark bundles Spark Connect, so **no `--packages` is needed**:
 
 ```bash
-SPARK_VERSION=4.1.2   # use the latest 4.1.x: https://spark.apache.org/downloads.html
+SPARK_VERSION=4.1.4   # use the latest 4.1.x: https://spark.apache.org/downloads.html
 curl -LO "https://dlcdn.apache.org/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz"
 tar xzf "spark-${SPARK_VERSION}-bin-hadoop3.tgz" && cd "spark-${SPARK_VERSION}-bin-hadoop3"
 ./sbin/start-connect-server.sh
@@ -241,8 +241,8 @@ Full docs: <https://hyukjinkwon.github.io/pyspark-client-wasm/>
 
 | Component | Supported |
 |-----------|-----------|
-| PySpark | `>=4.0` (Spark Connect's wire protocol is stable across the 4.x line; `install()` raises below 4.0). CI exercises 4.0.0 and 4.1.2. |
-| Spark Connect server | Spark 4.x (`apache/spark:4.1.2` in the deploy stack; CI also runs 4.0.0) |
+| PySpark | `>=4.0` (Spark Connect's wire protocol is stable across the 4.x line; `install()` raises below 4.0). CI exercises the latest patch release of every line from 4.0 through 4.3. |
+| Spark Connect server | Spark 4.x (`apache/spark:4.1.2` in the deploy stack; CI also covers 4.0 through 4.3) |
 | Pyodide | >= 0.28 (Python 3.13) in the browser; Python 3.11+ for local dev |
 | Proxy | Envoy with `envoy.filters.http.grpc_web` (`v1.31-latest`) |
 
